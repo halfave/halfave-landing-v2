@@ -1,18 +1,17 @@
 import { useState } from 'react'
 import type { Building } from './types'
-import LandingPage from './pages/LandingPage'
-import BinLookupPage from './pages/BinLookupPage'
+import MainSitePage from './pages/MainSitePage'
 import EmailGatePage from './pages/EmailGatePage'
 import ReportPage from './pages/ReportPage'
 
-type Step = 'landing' | 'bin' | 'email' | 'report'
+type Step = 'main' | 'email' | 'report'
 
 export default function App() {
-  const [step, setStep] = useState<Step>('landing')
+  const [step, setStep] = useState<Step>('main')
   const [building, setBuilding] = useState<Building | null>(null)
   const [email, setEmail] = useState('')
 
-  function handleBuildingFound(b: Building) {
+  function handleGetReport(b: Building) {
     setBuilding(b)
     setStep('email')
   }
@@ -25,24 +24,21 @@ export default function App() {
   function handleReset() {
     setBuilding(null)
     setEmail('')
-    setStep('landing')
+    setStep('main')
   }
 
   switch (step) {
-    case 'landing':
-      return <LandingPage onStart={() => setStep('bin')} />
-
-    case 'bin':
-      return <BinLookupPage onFound={handleBuildingFound} onBack={() => setStep('landing')} />
+    case 'main':
+      return <MainSitePage onGetReport={handleGetReport} />
 
     case 'email':
       return building
-        ? <EmailGatePage building={building} onUnlock={handleEmailSubmit} onBack={() => setStep('bin')} />
-        : <LandingPage onStart={() => setStep('bin')} />
+        ? <EmailGatePage building={building} onUnlock={handleEmailSubmit} onBack={handleReset} />
+        : <MainSitePage onGetReport={handleGetReport} />
 
     case 'report':
       return building && email
         ? <ReportPage building={building} email={email} onReset={handleReset} />
-        : <LandingPage onStart={() => setStep('bin')} />
+        : <MainSitePage onGetReport={handleGetReport} />
   }
 }
