@@ -10,7 +10,7 @@ interface Props {
   building: Building
   email: string
   onReset: () => void
-  onGoRisk?: () => void
+  onGoRisk?: () => void // eslint-disable-line
 }
 
 // ─── Risk bucket badge ────────────────────────────────────────────────────────
@@ -247,7 +247,7 @@ const dist: Record<string, React.CSSProperties> = {
 }
 
 // ─── Main report ──────────────────────────────────────────────────────────────
-export default function ReportPage({ building, email, onReset, onGoRisk }: Props) {
+export default function ReportPage({ building, email, onReset, onGoRisk: _onGoRisk }: Props) {
   const { data, loading } = useRiskData()
   const color = RISK_COLORS[building.risk_bucket] ?? '#7a8fa6'
 
