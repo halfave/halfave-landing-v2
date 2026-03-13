@@ -83,7 +83,7 @@ export function useRiskData() {
           .sort((a, b) => b.total - a.total)
 
         const top_buildings = [...buildings]
-          .sort((a, b) => b.risk_score - a.risk_score)
+          .sort((a, b) => (b.risk_score ?? 0) - (a.risk_score ?? 0))
           .slice(0, 20)
 
         setData({ total: buildings.length, by_bucket, by_borough, by_story_band, by_mgmt, top_buildings })
