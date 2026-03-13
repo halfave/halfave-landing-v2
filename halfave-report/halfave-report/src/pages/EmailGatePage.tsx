@@ -25,8 +25,8 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [logoErr, setLogoErr] = useState(false)
 
-  const bucketColor = RISK_COLORS[building.risk_bucket] ?? '#7a8fa6'
-  const score = Math.round(building.risk_score)
+  const bucketColor = RISK_COLORS[building.risk_bucket ?? ''] ?? '#7a8fa6'
+  const score = Math.round(building.risk_score ?? 0)
   const addr = building.address || 'this building'
 
   async function handleSubmit() {
