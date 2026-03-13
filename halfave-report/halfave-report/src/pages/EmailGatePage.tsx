@@ -24,6 +24,7 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [logoErr, setLogoErr] = useState(false)
+  const [sent, setSent] = useState(false)
 
   const bucketColor = RISK_COLORS[building.risk_bucket ?? ''] ?? '#7a8fa6'
   const score = Math.round(building.risk_score ?? 0)
@@ -64,7 +65,9 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
     }).catch(err => console.warn('Email send failed:', err))
 
     setLoading(false)
-    onUnlock(trimmed)
+    setSent(true)
+    // Brief confirmation, then advance to report
+    setTimeout(() => onUnlock(trimmed), 1400)
   }
 
   return (
@@ -118,7 +121,7 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
 
           {/* Gradient overlay + CTA copy */}
           <div style={s.overlay}>
-            <div style={s.lockTitle}>See what's driving your risk score</div>
+            <div style={s.lockTitle}>Your full report — sent to your inbox</div>
             <ul style={s.bullets}>
               <li style={s.bullet}><span style={s.bulletDot}>•</span>Every violation and penalty tied to this property</li>
               <li style={s.bullet}><span style={s.bulletDot}>•</span>What to fix, what to fight, and what to ignore</li>
@@ -140,15 +143,15 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
             autoFocus
           />
           <button
-            style={{ ...s.ctaBtn, opacity: loading ? 0.65 : 1 }}
+            style={{ ...s.ctaBtn, opacity: loading || sent ? 0.75 : 1, background: sent ? '#3a7d5e' : '#111e30' }}
             onClick={handleSubmit}
-            disabled={loading}
+            disabled={loading || sent}
           >
-            {loading ? 'Unlocking…' : 'Show Full Report →'}
+            {sent ? '✓ Report sent — opening…' : loading ? 'Sending…' : 'Send My Report →'}
           </button>
           {error && <div style={s.error}>{error}</div>}
           <p style={s.privacy}>
-            No spam. No account required. We'll send this report and alert you if the building's risk score changes.
+            We'll email you a permanent link to this report. No spam, no account required.
           </p>
         </div>
 
