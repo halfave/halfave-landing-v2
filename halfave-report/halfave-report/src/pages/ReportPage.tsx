@@ -1088,7 +1088,7 @@ export default function ReportPage(_props: ReportPageProps) {
         bin: w.bin,
         address: w.address || "",
         borough: w.boroName || w.borough || "",
-        borough_name: w.boroName || w.borough || null,
+        borough_name: w.boroName || w.borough || undefined,
         bbl: w.bbl || null,
         stories: w.stories ? parseInt(String(w.stories)) : null,
         unit_count: w.units ? parseInt(String(w.units)) : null,
