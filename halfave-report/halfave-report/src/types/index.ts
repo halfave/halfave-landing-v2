@@ -13,6 +13,7 @@ export interface Building {
   risk_score: number
   risk_bucket: RiskBucket
   percentile: number
+  bin?: number | string | null
   top_drivers: Record<string, unknown> | null
 }
 
