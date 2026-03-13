@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer
 } from 'recharts'
 import type { Building, PivotRow } from '../types'
 import { RISK_COLORS, RISK_ORDER } from '../types'
@@ -276,8 +276,6 @@ function NYCBoroughMap({ rows }: BoroughMapProps) {
   for (const r of rows) {
     avgByBorough[r.label] = r.avg_score
   }
-
-  const hoveredRow = rows.find(r => r.label === hovered)
 
   return (
     <div style={bmap.wrap}>
