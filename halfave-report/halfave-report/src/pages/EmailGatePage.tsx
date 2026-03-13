@@ -9,7 +9,7 @@ interface Props {
   onBack: () => void
 }
 
-const LOGO = 'https://pub-8148357eae8a439fa3a35df4c60df703.r2.dev/site/logo/halfspacelogo.png'
+const LOGO = 'https://pub-8148357eae8a439fa3a35df4c60df703.r2.dev/site/logo/Asset%201%401x%20(2).png'
 
 const MOCK_VIOLATIONS = [
   { cls: 'C', title: 'Elevator — no annual inspection certificate', meta: 'NOV-123845 · Issued 01/14/2025 · ECB', open: true },
@@ -175,7 +175,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: '12px', color: 'rgba(17,30,48,0.45)',
     background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
   },
-  logo: { height: 42, width: 'auto', display: 'block' },
+  logo: { height: 55, width: 'auto', display: 'block' },
   logoFallback: { fontFamily: 'var(--font-serif)', fontWeight: 600, fontSize: 15, color: 'var(--navy)' },
 
   body: {
