@@ -189,7 +189,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: '12px', color: 'rgba(17,30,48,0.45)',
     background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
   },
-  logo: { height: 50, width: 'auto', display: 'block' },
+  logo: { height: 32, width: 'auto', display: 'block' },
   logoFallback: { fontFamily: 'var(--font-serif)', fontWeight: 600, fontSize: 15, color: 'var(--navy)' },
 
   body: {
