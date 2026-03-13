@@ -8,7 +8,7 @@ const supabase = createClient(
 ).schema("analytics");
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-import type { Building, RiskScore, BuildingFeatures, Violation, BoroughStat, HalfaveWindow } from "../types";
+import type { Building, RiskScore, BuildingFeatures, Violation, BoroughStat, HalfaveWindow, HalfaveBldgWindow } from "../types";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const BOROUGH_NAMES: Record<string, string> = {
@@ -1090,8 +1090,8 @@ export default function ReportPage(_props: ReportPageProps) {
         borough: w.boroName || w.borough || "",
         borough_name: w.boroName || w.borough || null,
         bbl: w.bbl || null,
-        stories: w.stories ? parseInt(w.stories) : null,
-        unit_count: w.units ? parseInt(w.units) : null,
+        stories: w.stories ? parseInt(String(w.stories)) : null,
+        unit_count: w.units ? parseInt(String(w.units)) : null,
         year_built: w.yearBuilt && w.yearBuilt !== "—" ? parseInt(w.yearBuilt) : null,
         zipcode: w.zipcode || null,
         management_program: w.managementProgram || null,
@@ -1128,7 +1128,7 @@ export default function ReportPage(_props: ReportPageProps) {
       });
 
       // Hydrate violations from window — flatten all sources into Violation[]
-      const vw = w.violations || {};
+      const vw = (w.violations || {}) as NonNullable<HalfaveBldgWindow["violations"]>;
       const toViolations = (arr: any[], agencyLabel: string, isOpen: boolean): Violation[] => {
         const agencyEnum = (agencyLabel === "HPD" || agencyLabel === "DOB" || agencyLabel === "ECB")
           ? agencyLabel as Violation["agency"]
