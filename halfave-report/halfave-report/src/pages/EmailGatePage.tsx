@@ -71,7 +71,7 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
         <div style={s.scoreBlock}>
           <div style={s.scoreEyebrow}>Building Risk Score</div>
           <div style={{ ...s.scoreNum, color: bucketColor }}>{score}</div>
-          <div style={s.scorePct}>Higher than {building.percentile ?? '—'}% of NYC buildings</div>
+          <div style={s.scorePct}>Higher risk than {building.percentile ?? '—'}% of NYC buildings</div>
         </div>
 
         {/* Blurred report preview */}
@@ -103,8 +103,9 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
           <div style={s.overlay}>
             <div style={s.lockTitle}>See what's driving your risk score</div>
             <ul style={s.bullets}>
-              <li style={s.bullet}><span style={s.bulletDot}>•</span>Every violation and penalty tied to {addr}</li>
+              <li style={s.bullet}><span style={s.bulletDot}>•</span>Every violation and penalty tied to this property</li>
               <li style={s.bullet}><span style={s.bulletDot}>•</span>What to fix, what to fight, and what to ignore</li>
+              <li style={s.bullet}><span style={s.bulletDot}>•</span>Inspections and filings due soon</li>
               <li style={s.bullet}><span style={s.bulletDot}>•</span>How {addr} ranks vs similar NYC properties</li>
             </ul>
           </div>
@@ -126,7 +127,7 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
             onClick={handleSubmit}
             disabled={loading}
           >
-            {loading ? 'Unlocking…' : 'Get Full Report →'}
+            {loading ? 'Unlocking…' : 'Show Full Report →'}
           </button>
           {error && <div style={s.error}>{error}</div>}
           <p style={s.privacy}>
@@ -154,7 +155,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: '12px', color: 'rgba(17,30,48,0.45)',
     background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
   },
-  logo: { height: 21, width: 'auto', display: 'block' },
+  logo: { height: 42, width: 'auto', display: 'block' },
   logoFallback: { fontFamily: 'var(--font-serif)', fontWeight: 600, fontSize: 15, color: 'var(--navy)' },
 
   body: {
@@ -168,7 +169,7 @@ const s: Record<string, React.CSSProperties> = {
     fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.13em',
     textTransform: 'uppercase', color: 'rgba(17,30,48,0.4)', marginBottom: 2,
   },
-  scoreNum: { fontFamily: 'var(--font-mono)', fontSize: 54, fontWeight: 500, lineHeight: 1 },
+  scoreNum: { fontFamily: 'var(--font-mono)', fontSize: 54, fontWeight: 500, lineHeight: 1, padding: '10px 0' },
   scorePct: { fontSize: 11, color: 'rgba(17,30,48,0.48)', marginTop: 4 },
 
   blurredWrap: {
