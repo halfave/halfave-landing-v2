@@ -1120,7 +1120,7 @@ interface ReportPageProps {
   onGoRisk?: () => void;
 }
 
-export default function ReportPage({ building: propBuilding }: ReportPageProps) {
+export default function ReportPage(_props: ReportPageProps) {
 
 
   const [building, setBuilding] = useState<Building | null>(null);
@@ -1135,63 +1135,107 @@ export default function ReportPage({ building: propBuilding }: ReportPageProps) 
     setLoading(true);
     setError(null);
     try {
-      // Resolve BIN from prop, URL param, or window global
-      const bin =
-        propBuilding?.bin
-          ? String(propBuilding.bin)
-          : new URLSearchParams(window.location.search).get("bin")
-            || String((window as any).__halfaveBldg?.bin ?? "");
+      const w = (window as any).__halfaveBldg;
+      if (!w?.bin) throw new Error("No building data found. Please search for a building first.");
 
-      if (!bin) throw new Error("No building BIN specified.");
-
-      // Always fetch the canonical building record from Supabase by BIN
-      const { data: bldgs, error: bErr } = await supabase
-        .from("buildings")
-        .select("*")
-        .eq("bin", bin)
-        .limit(1);
-      if (bErr) throw bErr;
-      if (!bldgs?.length) throw new Error(`No building found for BIN ${bin}`);
-      const resolvedBldg: Building = bldgs[0];
+      // Hydrate building from window
+      const resolvedBldg: Building = {
+        id: `bin-${w.bin}`,
+        bin: w.bin,
+        address: w.address || "",
+        borough: w.boroName || w.borough || "",
+        bbl: w.bbl || null,
+        stories: w.stories ? parseInt(w.stories) : null,
+        unit_count: w.units ? parseInt(w.units) : null,
+        year_built: w.yearBuilt && w.yearBuilt !== "—" ? parseInt(w.yearBuilt) : null,
+        zipcode: w.zipcode || null,
+        management_program: w.managementProgram || null,
+        slug: null,
+      };
       setBuilding(resolvedBldg);
-      const buildingId = resolvedBldg.id;
 
-      // Parallel: risk score + features + violations
-      const [rsRes, ftRes, vRes] = await Promise.all([
-        supabase
-          .from("building_risk_scores")
-          .select("*")
-          .eq("building_id", buildingId)
-          .single(),
-        supabase
-          .from("building_features")
-          .select("*")
-          .eq("building_id", buildingId)
-          .single(),
-        supabase
-          .from("violations")
-          .select("*")
-          .eq("building_id", buildingId)
-          .order("issue_date", { ascending: false }),
-      ]);
+      // Hydrate risk score from window
+      setRiskScore({
+        building_id: resolvedBldg.id,
+        risk_score: w.riskScore ?? 0,
+        percentile: w.percentile ?? 0,
+        risk_bucket: w.riskBucket ?? "Unknown",
+        open_pct: 0, recent_pct: 0, severity_pct: 0, age_pct: 0,
+        top_drivers: { drivers: (w.topDrivers || []).map((d: string) => ({ label: d, score: 0 })) },
+        updated_at: new Date().toISOString(),
+      });
 
-      if (rsRes.data) setRiskScore(rsRes.data);
-      if (ftRes.data) setFeatures(ftRes.data);
-      if (vRes.data) setViolations(vRes.data);
+      // Hydrate building features from window
+      setFeatures({
+        building_id: resolvedBldg.id,
+        open_violations: w.openViolations ?? 0,
+        recent_12m_violations: w.recent12m ?? 0,
+        severity_points: 0,
+        avg_open_age_days: null,
+        updated_at: new Date().toISOString(),
+        expired_tco: w.expiredTco ?? false,
+        boiler_count: w.boilerCount ?? 0,
+        boiler_avg_missed_years: null,
+        elevator_count: w.elevatorCount ?? 0,
+        elevator_avg_missed_years: null,
+        violation_density: null,
+        avg_resolution_days: null,
+        resolution_rate: null,
+      });
 
-      // Borough stats: join buildings + building_risk_scores
+      // Hydrate violations from window — flatten all sources into Violation[]
+      const vw = w.violations || {};
+      const toViolations = (arr: any[], source: string, isOpen: boolean): Violation[] =>
+        (arr || []).map((v: any) => ({
+          id: v.id || "",
+          building_id: resolvedBldg.id,
+          source,
+          violation_type: v.cls || source,
+          description: v.desc || v.description || "",
+          issue_date: v.date || v.violation_date || v.issue_date || null,
+          status: isOpen ? "open" : "closed",
+          penalty_amount: v.penalty ?? null,
+          apartment: v.apt || null,
+          link: v.link || null,
+        }));
+
+      const allViolations: Violation[] = [
+        ...toViolations(vw.hpd?.open || [], "HPD", true),
+        ...toViolations(vw.hpd?.closed || [], "HPD", false),
+        ...toViolations(vw.dob?.open || [], "DOB", true),
+        ...toViolations(vw.dob?.closed || [], "DOB", false),
+        ...toViolations(vw.ecb?.open || [], "ECB", true),
+        ...toViolations(vw.ecb?.closed || [], "ECB", false),
+        ...toViolations(
+          (vw.oath || []).filter((v: any) => {
+            const d = (v.disposition || "").toUpperCase();
+            return !d.includes("DISMISS") && d !== "PAID IN FULL" && d !== "PAID";
+          }), "OATH", true),
+        ...toViolations(
+          (vw.sanitation || []).filter((v: any) => parseFloat(v.balance_due ?? "0") > 0),
+          "DSNY", true),
+        ...toViolations(
+          (vw.dohmh || []).filter((v: any) => parseFloat(v.balance_due ?? "0") > 0),
+          "DOHMH", true),
+        ...toViolations(
+          (vw.nypd || []).filter((v: any) => parseFloat(v.balance_due ?? "0") > 0),
+          "NYPD", true),
+      ];
+      setViolations(allViolations);
+
+      // Borough stats: fetch from Supabase index (this is the comparison data, not the building itself)
       try {
-        const { data: boroughData } = await supabase
+        const db = (supabase as any).schema('analytics');
+        const { data: boroughData } = await db
           .from("buildings")
-          .select("borough, building_risk_scores(risk_score)");
+          .select("borough, building_risk_scores!inner(risk_score)");
         if (boroughData) {
           const boroughMap: Record<string, { total: number; count: number }> = {};
           const boroughNameMap: Record<string, string> = {
             "1": "Manhattan", "2": "Bronx", "3": "Brooklyn", "4": "Queens", "5": "Staten Island",
-            MN: "Manhattan", BX: "Bronx", BK: "Brooklyn", QN: "Queens", SI: "Staten Island",
           };
           for (const row of boroughData) {
-            const bName = boroughNameMap[String(row.borough)] ?? String(row.borough);
+            const bName = boroughNameMap[String(row.borough)];
             if (!bName) continue;
             const scores = (row as any).building_risk_scores;
             const score = Array.isArray(scores) ? scores[0]?.risk_score : scores?.risk_score;
