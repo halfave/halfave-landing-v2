@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer
-} from 'recharts'
+
 import type { Building, PivotRow } from '../types'
 import { RISK_COLORS, RISK_ORDER } from '../types'
 import { useRiskData } from '../hooks/useRiskData'
