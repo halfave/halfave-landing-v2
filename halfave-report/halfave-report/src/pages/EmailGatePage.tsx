@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import type { Building } from '../types'
 import { RISK_COLORS } from '../types'
-import { supabase } from '../lib/supabase'
 
 interface Props {
   building: Building
@@ -38,19 +37,7 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
     }
     setLoading(true)
     setError(null)
-    try {
-      await supabase.schema('analytics').from('report_leads').insert({
-        email: trimmed,
-        building_id: building.id,
-        building_address: building.address,
-        risk_bucket: building.risk_bucket,
-        risk_score: building.risk_score,
-        bin: building.bin ? String(building.bin) : null,
-        percentile: building.percentile ?? null,
-      })
-    } catch (_) {}
-
-    // Fire report email via Edge Function (non-blocking)
+    // Edge Function handles both lead insert and email send
     fetch('https://mjkkzniagexfooclqsjr.supabase.co/functions/v1/send-report-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
