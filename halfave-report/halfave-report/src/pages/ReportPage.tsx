@@ -955,7 +955,16 @@ function PeerBar({
 }
 
 // ─── Main ReportPage ──────────────────────────────────────────────────────────
-export default function ReportPage() {
+interface ReportPageProps {
+  building?: Building;
+  email?: string;
+  onReset?: () => void;
+  onGoRisk?: () => void;
+}
+
+export default function ReportPage(_props: ReportPageProps) {
+
+
   const [building, setBuilding] = useState<Building | null>(null);
   const [riskScore, setRiskScore] = useState<RiskScore | null>(null);
   const [features, setFeatures] = useState<BuildingFeatures | null>(null);
@@ -1057,7 +1066,6 @@ export default function ReportPage() {
 
   // Financial exposure
   const totalBalance = violations.reduce((s, v) => s + (v.balance_due ?? 0), 0);
-  const totalPenalty = violations.reduce((s, v) => s + (v.penalty_amount ?? 0), 0);
 
   const scoreColor = riskColor(pct);
   const scoreBg = riskBg(pct);
