@@ -13,6 +13,7 @@ const BUCKET_BG: Record<string, string> = {
 
 interface BucketStat { risk_bucket: string; count: number; avg_score: number; min_score: number; max_score: number; }
 interface BoroughStat { borough: number; count: number; avg_score: number; high_risk_count: number; }
+interface OwnershipStat { program: string; count: number; avg_score: number; }
 
 const BUCKET_ORDER = ['Critical', 'High Risk', 'Elevated', 'Watch', 'Healthy'];
 
@@ -24,16 +25,17 @@ interface Props { onBack?: () => void }
 export default function RiskIndexPage({ onBack }: Props) {
   const [buckets, setBuckets] = useState<BucketStat[]>([]);
   const [boroughs, setBoroughs] = useState<BoroughStat[]>([]);
+  const [ownership, setOwnership] = useState<OwnershipStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
 
   useEffect(() => {
     async function load() {
       try {
-        const [scoresRes, buildingsRes] = await Promise.all([
+        const [scoresRes, buildingsRes, ownershipRes] = await Promise.all([
           db.from('building_risk_scores').select('risk_bucket, risk_score'),
           db.from('buildings').select('borough, building_risk_scores!inner(risk_score, risk_bucket)'),
-
+          db.from('buildings').select('management_program, building_risk_scores!inner(risk_score)'),
         ]);
 
         if (scoresRes.data) {
@@ -71,6 +73,24 @@ export default function RiskIndexPage({ onBack }: Props) {
             avg_score: Math.round(v.scores.reduce((a, x) => a + x, 0) / v.scores.length * 10) / 10,
             high_risk_count: v.high,
           })).sort((a, b) => b.avg_score - a.avg_score));
+        }
+
+        if (ownershipRes.data) {
+          const omap: Record<string, number[]> = {};
+          for (const b of ownershipRes.data as { management_program: string; building_risk_scores: { risk_score: number } }[]) {
+            const prog = b.management_program || 'Other';
+            const score = (b.building_risk_scores as any)?.risk_score ?? (Array.isArray(b.building_risk_scores) ? b.building_risk_scores[0]?.risk_score : null);
+            if (score == null) continue;
+            if (!omap[prog]) omap[prog] = [];
+            omap[prog].push(score);
+          }
+          setOwnership(Object.entries(omap)
+            .map(([program, scores]) => ({
+              program,
+              count: scores.length,
+              avg_score: Math.round(scores.reduce((a, x) => a + x, 0) / scores.length * 10) / 10,
+            }))
+            .sort((a, b) => b.avg_score - a.avg_score));
         }
 
       } catch (err) {
@@ -184,6 +204,32 @@ export default function RiskIndexPage({ onBack }: Props) {
               </div>
             </section>
 
+
+
+            {ownership.length > 0 && (
+              <section style={{ background: '#fff', borderRadius: 20, padding: '2rem', marginBottom: '1.5rem', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9ca3af', marginBottom: '0.3rem' }}>Risk by Ownership Type</div>
+                <div style={{ fontSize: '0.8rem', color: '#9ca3af', marginBottom: '1.5rem' }}>Comparing private vs. public housing portfolios by average risk score</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
+                  {ownership.map(o => {
+                    const color = o.avg_score >= 35 ? '#c4533a' : o.avg_score >= 20 ? '#c9a227' : '#3a7d5e';
+                    const bg = o.avg_score >= 35 ? '#fef2f2' : o.avg_score >= 20 ? '#fefce8' : '#f0fdf4';
+                    const barPct = Math.min((o.avg_score / 100) * 100, 100);
+                    return (
+                      <div key={o.program} style={{ border: `1px solid ${bg}`, borderRadius: 14, padding: '1.25rem', background: bg }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.875rem', color: '#111e30', marginBottom: '0.2rem' }}>{o.program}</div>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9ca3af', marginBottom: '1rem' }}>{o.count.toLocaleString()} buildings</div>
+                        <div style={{ height: 4, background: 'rgba(0,0,0,0.08)', borderRadius: 2, marginBottom: '0.75rem', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${barPct}%`, background: color, borderRadius: 2, transition: 'width 0.6s ease' }} />
+                        </div>
+                        <div style={{ fontFamily: 'Georgia, serif', fontSize: '2rem', fontWeight: 600, color, lineHeight: 1 }}>{o.avg_score}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '0.25rem' }}>avg risk score</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
 
             <p style={{ textAlign: 'center', fontSize: '0.75rem', color: '#9ca3af', marginTop: '2rem' }}>
