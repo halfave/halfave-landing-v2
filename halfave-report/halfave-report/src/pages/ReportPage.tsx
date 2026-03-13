@@ -1136,7 +1136,7 @@ export default function ReportPage({ building: propBuilding }: ReportPageProps) 
     setError(null);
     try {
       // Use prop building if available, otherwise fall back to BIN lookup
-      let bldg: Building | null = propBuilding ?? null;
+      let bldg: Building | null = propBuilding ? { ...propBuilding, address: propBuilding.address ?? "" } as Building : null;
 
       if (!bldg) {
         const params = new URLSearchParams(window.location.search);
@@ -1152,19 +1152,21 @@ export default function ReportPage({ building: propBuilding }: ReportPageProps) 
         bldg = bldgs[0];
       }
 
-      setBuilding(bldg);
+      // bldg is guaranteed non-null here (threw above if not found)
+      const resolvedBldg = bldg!;
+      setBuilding(resolvedBldg);
 
       // If id looks like "bin-XXXXXX" (from MainSitePage), look up the real UUID
-      let buildingId = bldg.id;
-      if (buildingId.startsWith("bin-") && bldg.bin) {
+      let buildingId = resolvedBldg.id;
+      if (buildingId.startsWith("bin-") && resolvedBldg.bin) {
         const { data: bldgs2 } = await supabase
           .from("buildings")
           .select("id")
-          .eq("bin", bldg.bin)
+          .eq("bin", resolvedBldg.bin)
           .limit(1);
         if (bldgs2?.length) {
           buildingId = bldgs2[0].id;
-          setBuilding({ ...bldg, id: buildingId });
+          setBuilding({ ...resolvedBldg, id: buildingId } as Building);
         }
       }
 
