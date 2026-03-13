@@ -1088,6 +1088,7 @@ export default function ReportPage(_props: ReportPageProps) {
         bin: w.bin,
         address: w.address || "",
         borough: w.boroName || w.borough || "",
+        borough_name: w.boroName || w.borough || null,
         bbl: w.bbl || null,
         stories: w.stories ? parseInt(w.stories) : null,
         unit_count: w.units ? parseInt(w.units) : null,
@@ -1095,6 +1096,10 @@ export default function ReportPage(_props: ReportPageProps) {
         zipcode: w.zipcode || null,
         management_program: w.managementProgram || null,
         slug: undefined,
+        risk_score: w.riskScore ?? null,
+        risk_bucket: w.riskBucket ?? null,
+        percentile: w.percentile ?? null,
+        top_drivers: w.topDrivers ?? null,
       };
       setBuilding(resolvedBldg);
 
