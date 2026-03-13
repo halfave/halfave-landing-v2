@@ -71,7 +71,21 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
   }
 
   return (
-    <div style={s.root}>
+    <div style={s.root} className="eg-root">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
+        .eg-root, .eg-root * {
+          --serif: 'Lora', Georgia, serif;
+          --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+          --mono: 'DM Mono', monospace;
+          --navy: #111e30;
+          --cream: #f7f4ef;
+          --slate: #7a8fa6;
+        }
+        .eg-root { font-family: var(--sans); }
+        .eg-root .eg-score-num { font-family: var(--serif); }
+        .eg-root .eg-mono { font-family: var(--mono); }
+      `}</style>
       <header style={s.hdr}>
         <button style={s.back} onClick={onBack}>
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
@@ -89,7 +103,7 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
 
         {/* Score */}
         <div style={s.scoreBlock}>
-          <div style={s.scoreEyebrow}>Building Risk Score</div>
+          <div style={s.scoreEyebrow} className="eg-mono">Building Risk Score</div>
           <div style={{ ...s.scoreNum, color: bucketColor }}>{score}</div>
           <div style={s.scorePct}>Higher risk than {building.percentile ?? '—'}% of NYC buildings</div>
         </div>
@@ -134,7 +148,7 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
         {/* Input + CTA */}
         <div style={s.bottom}>
           <input
-            style={s.emailIn}
+            style={s.emailIn} className="eg-mono"
             type="email"
             placeholder="john.smith@email.com"
             value={email}
@@ -150,8 +164,8 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
             {sent ? '✓ Report sent — opening…' : loading ? 'Sending…' : 'Send My Report →'}
           </button>
           {error && <div style={s.error}>{error}</div>}
-          <p style={s.privacy}>
-            We'll email you a permanent link to this report. No spam, no account required.
+          <p style={s.privacy} className="eg-mono">
+            We'll email you this report. No spam, no account required.
           </p>
         </div>
 
@@ -175,7 +189,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: '12px', color: 'rgba(17,30,48,0.45)',
     background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
   },
-  logo: { height: 55, width: 'auto', display: 'block' },
+  logo: { height: 50, width: 'auto', display: 'block' },
   logoFallback: { fontFamily: 'var(--font-serif)', fontWeight: 600, fontSize: 15, color: 'var(--navy)' },
 
   body: {
@@ -186,10 +200,10 @@ const s: Record<string, React.CSSProperties> = {
 
   scoreBlock: { textAlign: 'center', flexShrink: 0, paddingBottom: 12 },
   scoreEyebrow: {
-    fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.13em',
+    fontSize: 9, letterSpacing: '0.13em',
     textTransform: 'uppercase', color: 'rgba(17,30,48,0.4)', marginBottom: 2,
   },
-  scoreNum: { fontFamily: 'var(--font-mono)', fontSize: 54, fontWeight: 500, lineHeight: 1, padding: '10px 0' },
+  scoreNum: { fontSize: 54, fontWeight: 500, lineHeight: 1, padding: '10px 0' },
   scorePct: { fontSize: 11, color: 'rgba(17,30,48,0.48)', marginTop: 4 },
 
   blurredWrap: {
@@ -245,13 +259,13 @@ const s: Record<string, React.CSSProperties> = {
   bottom: { flexShrink: 0, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 7 },
   emailIn: {
     width: '100%', padding: '10px 13px',
-    fontFamily: 'var(--font-mono)', fontSize: 13,
+    fontSize: 13,
     border: '1px solid rgba(17,30,48,0.16)', borderRadius: 8,
     background: '#fff', color: '#111e30', outline: 'none', boxSizing: 'border-box',
   },
   ctaBtn: {
     width: '100%', padding: 12, background: '#111e30', color: '#f7f4ef',
-    fontFamily: 'var(--font-serif)', fontSize: 14, fontWeight: 600,
+    fontFamily: "'Lora', Georgia, serif", fontSize: 14, fontWeight: 600,
     border: 'none', borderRadius: 8, cursor: 'pointer',
   },
   error: {
@@ -260,7 +274,7 @@ const s: Record<string, React.CSSProperties> = {
     color: '#c4533a', fontFamily: 'var(--font-mono)', fontSize: 11,
   },
   privacy: {
-    fontFamily: 'var(--font-mono)', fontSize: 9.5,
+    fontSize: 9.5,
     color: 'rgba(17,30,48,0.35)', textAlign: 'center', lineHeight: 1.6,
   },
 }
