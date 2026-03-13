@@ -894,22 +894,33 @@ function ViolationRow({ v, expanded, onToggle }: {
 // ─── Violation Tabs ────────────────────────────────────────────────────────────
 type SortKey = "severity" | "issue_date" | "is_open" | "violation_type";
 
+type SourceTab = "HPD" | "DOB" | "ECB" | "OATH" | "DSNY" | "DOHMH" | "NYPD";
+const ALL_TABS: SourceTab[] = ["HPD", "DOB", "ECB", "OATH", "DSNY", "DOHMH", "NYPD"];
+const TAB_LABELS: Record<SourceTab, string> = {
+  HPD: "HPD", DOB: "DOB", ECB: "ECB", OATH: "OATH", DSNY: "Sanitation", DOHMH: "Health", NYPD: "NYPD",
+};
+
 function ViolationTabs({ violations }: { violations: Violation[] }) {
-  const [tab, setTab] = useState<"HPD" | "DOB" | "ECB">("HPD");
+  // Only show open or non-zero balance_due
+  const active = violations.filter((v) => v.is_open || (v.balance_due != null && v.balance_due !== 0));
+
+  const bySource: Record<SourceTab, Violation[]> = {
+    HPD: [], DOB: [], ECB: [], OATH: [], DSNY: [], DOHMH: [], NYPD: [],
+  };
+  for (const v of active) {
+    const s = (v.source || v.agency) as SourceTab;
+    if (s in bySource) bySource[s].push(v);
+  }
+
+  // Only show tabs with data; default to first with data
+  const activeTabs = ALL_TABS.filter((t) => bySource[t].length > 0);
+  const [tab, setTab] = useState<SourceTab>(activeTabs[0] ?? "HPD");
   const [sortKey, setSortKey] = useState<SortKey>("severity");
   const [sortAsc, setSortAsc] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(20);
 
-  const byAgency = {
-    HPD: violations.filter((v) => v.agency === "HPD"),
-    DOB: violations.filter((v) => v.agency === "DOB"),
-    ECB: violations.filter((v) => v.agency === "ECB"),
-  };
-
-  const current = byAgency[tab];
-  const open = current.filter((v) => v.is_open);
-  const closed = current.filter((v) => !v.is_open);
+  const current = bySource[tab] ?? [];
 
   const sorted = [...current].sort((a, b) => {
     let cmp = 0;
@@ -935,52 +946,41 @@ function ViolationTabs({ violations }: { violations: Violation[] }) {
   }
 
   const th = (label: string, key: SortKey) => (
-    <th
-      className={sortKey === key ? "sorted" : ""}
-      onClick={() => toggleSort(key)}
-    >
+    <th className={sortKey === key ? "sorted" : ""} onClick={() => toggleSort(key)}>
       {label}
       <span className="sort-arrow">{sortKey === key ? (sortAsc ? "↑" : "↓") : "↕"}</span>
     </th>
   );
 
-  const tabs: ("HPD" | "DOB" | "ECB")[] = ["HPD", "DOB", "ECB"];
+  if (active.length === 0) {
+    return (
+      <div style={{ padding: "32px 20px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--slate)" }}>
+        No open violations or outstanding balances on record
+      </div>
+    );
+  }
 
   return (
     <div>
       <div className="rp-tabs-nav">
-        {tabs.map((t) => (
+        {activeTabs.map((t) => (
           <button
             key={t}
             className={`rp-tab-btn ${tab === t ? "active" : ""}`}
             onClick={() => { setTab(t); setPage(20); }}
           >
-            {t}
-            <span className="rp-tab-count">{byAgency[t].length}</span>
+            {TAB_LABELS[t]}
+            <span className="rp-tab-count">{bySource[t].length}</span>
           </button>
         ))}
       </div>
 
       {current.length === 0 ? (
         <div style={{ padding: "32px 20px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--slate)" }}>
-          No {tab} violations on record
+          No open {TAB_LABELS[tab]} violations on record
         </div>
       ) : (
         <>
-          <div className="rp-vsummary">
-            <div className="rp-vsum-cell">
-              <div className="rp-vsum-num" style={{ color: "var(--risk-red)" }}>{open.length}</div>
-              <div className="rp-vsum-lbl">Open</div>
-            </div>
-            <div className="rp-vsum-cell">
-              <div className="rp-vsum-num" style={{ color: "var(--risk-green)" }}>{closed.length}</div>
-              <div className="rp-vsum-lbl">Closed</div>
-            </div>
-            <div className="rp-vsum-cell">
-              <div className="rp-vsum-num">{current.filter((v) => v.severity === "C" || v.severity === "CLASS - 1").length}</div>
-              <div className="rp-vsum-lbl">High Severity</div>
-            </div>
-          </div>
           <div className="rp-vtable-wrap">
             <table className="rp-vtable">
               <thead>
@@ -1480,6 +1480,19 @@ export default function ReportPage(_props: ReportPageProps) {
           )}
 
 
+          {/* ── OPEN VIOLATIONS ── */}
+          {violations.length > 0 && (
+            <div className="rp-section">
+              <div className="rp-section-title">
+                Open Violations
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                  open or balance due · click row to expand
+                </span>
+              </div>
+              <ViolationTabs violations={violations} />
+            </div>
+          )}
+
           {/* ── RISK BY BOROUGH ── */}
           {boroughStats.length > 0 && (
             <div className="rp-section">
@@ -1550,19 +1563,6 @@ export default function ReportPage(_props: ReportPageProps) {
               <div style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--slate)" }}>
                 Gray marker = NYC building average. Bar = this building.
               </div>
-            </div>
-          )}
-
-          {/* ── VIOLATIONS ── */}
-          {violations.length > 0 && (
-            <div className="rp-section">
-              <div className="rp-section-title">
-                All Violations
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
-                  {violations.length} total · click row to expand
-                </span>
-              </div>
-              <ViolationTabs violations={violations} />
             </div>
           )}
 
