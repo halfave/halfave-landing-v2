@@ -48,6 +48,21 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
         percentile: building.percentile ?? null,
       })
     } catch (_) {}
+
+    // Fire report email via Edge Function (non-blocking)
+    fetch('https://mjkkzniagexfooclqsjr.supabase.co/functions/v1/send-report-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: trimmed,
+        building_address: building.address,
+        risk_score: building.risk_score,
+        percentile: building.percentile ?? null,
+        risk_bucket: building.risk_bucket,
+        bin: building.bin ? String(building.bin) : null,
+      }),
+    }).catch(err => console.warn('Email send failed:', err))
+
     setLoading(false)
     onUnlock(trimmed)
   }
