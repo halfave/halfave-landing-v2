@@ -1,17 +1,32 @@
 import { useEffect } from 'react'
 import MainSite from './MainSite'
 import type { Building } from '../types'
-import { BOROUGH_NAMES } from '../types'
 
 interface Props {
   onGetReport: (building: Building) => void
   onGoRisk?: () => void
 }
 
+declare global {
+  interface Window {
+    __halfaveBldg?: {
+      bin: number
+      address: string
+      bbl: string
+      stories: string | number
+      units: string | number
+      borough: string
+      riskScore: number
+      percentile: number
+      riskBucket: string
+    }
+  }
+}
+
 export default function MainSitePage({ onGetReport, onGoRisk }: Props) {
   useEffect(() => {
-    const observer = new MutationObserver(() => {
-      // Intercept "How does NYC compare?" / risk.html links
+    function patchLinks() {
+      // Intercept risk.html links
       if (onGoRisk) {
         document.querySelectorAll<HTMLAnchorElement>('a[href*="risk.html"]').forEach(link => {
           if (link.dataset.riskPatched) return
@@ -24,51 +39,48 @@ export default function MainSitePage({ onGetReport, onGoRisk }: Props) {
         })
       }
 
-      // Intercept "Get Full Report" button
-      const btn = document.querySelector<HTMLAnchorElement>(
-        'a[onclick*="scrollIntoView"], a[href="#"][onclick*="bin-section"]'
-      )
-      if (!btn) return
-      if (btn.dataset.patched) return
-      btn.dataset.patched = '1'
+      // Intercept "Unlock Full Building Report" button
+      document.querySelectorAll<HTMLAnchorElement>('a[href="#"]').forEach(btn => {
+        if (btn.dataset.patched) return
+        const text = btn.textContent?.trim() ?? ''
+        if (!text.includes('Unlock') && !text.includes('Get Full Report')) return
+        btn.dataset.patched = '1'
 
-      btn.addEventListener('click', (e) => {
-        e.preventDefault()
-        e.stopPropagation()
+        btn.addEventListener('click', (e) => {
+          e.preventDefault()
+          e.stopPropagation()
 
-        const addressEl = document.querySelector<HTMLElement>('.bin-detail-table thead div')
-        const address = addressEl?.textContent?.trim() ?? ''
+          const bldg = window.__halfaveBldg
+          if (!bldg) return
 
-        const scoreEl = document.querySelector<HTMLElement>('[style*="Building Risk Score"] + div')
-        const riskScore = scoreEl ? parseFloat(scoreEl.textContent ?? '0') : 0
+          const boroughMap: Record<string, number> = {
+            'manhattan': 1, 'bronx': 2, 'brooklyn': 3, 'queens': 4, 'staten island': 5,
+          }
+          const boroughNum = boroughMap[bldg.borough?.toLowerCase?.()] ?? 0
 
-        const binInput = document.querySelector<HTMLInputElement>('#bin-input')
-        const bin = binInput ? parseInt(binInput.value.trim()) : 0
+          const building: Building = {
+            id: `bin-${bldg.bin}`,
+            address: bldg.address || `BIN ${bldg.bin}`,
+            slug: `bin-${bldg.bin}`,
+            borough: boroughNum,
+            borough_name: bldg.borough || 'NYC',
+            stories: typeof bldg.stories === 'number' ? bldg.stories : null,
+            story_band: 'Unknown',
+            unit_count: typeof bldg.units === 'number' ? bldg.units : null,
+            management_program: 'PVT',
+            risk_score: bldg.riskScore ?? 50,
+            risk_bucket: bldg.riskBucket as Building['risk_bucket'] ?? 'Watch',
+            percentile: bldg.percentile ?? 50,
+            top_drivers: null,
+          }
 
-        const boroughMatch = address.match(/,\s*(Manhattan|Bronx|Brooklyn|Queens|Staten Island)/i)
-        const boroughName = boroughMatch?.[1] ?? 'NYC'
-        const borough = Object.entries(BOROUGH_NAMES).find(([, v]) => v === boroughName)?.[0]
-
-        const building: Building = {
-          id: `bin-${bin}`,
-          address: address || `BIN ${bin}`,
-          slug: `bin-${bin}`,
-          borough: borough ? parseInt(borough) : 0,
-          borough_name: boroughName,
-          stories: null,
-          story_band: 'Unknown',
-          unit_count: null,
-          management_program: 'PVT',
-          risk_score: riskScore || 50,
-          risk_bucket: riskScore >= 70 ? 'Critical' : riskScore >= 55 ? 'High Risk' : riskScore >= 35 ? 'Elevated' : riskScore >= 20 ? 'Watch' : 'Healthy',
-          percentile: 50,
-          top_drivers: null,
-        }
-
-        onGetReport(building)
+          onGetReport(building)
+        })
       })
-    })
+    }
 
+    patchLinks()
+    const observer = new MutationObserver(patchLinks)
     observer.observe(document.body, { childList: true, subtree: true })
     return () => observer.disconnect()
   }, [onGetReport, onGoRisk])
