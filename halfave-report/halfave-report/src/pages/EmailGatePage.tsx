@@ -44,6 +44,8 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
         building_address: building.address,
         risk_bucket: building.risk_bucket,
         risk_score: building.risk_score,
+        bin: building.bin ? String(building.bin) : null,
+        percentile: building.percentile ?? null,
       })
     } catch (_) {}
     setLoading(false)
