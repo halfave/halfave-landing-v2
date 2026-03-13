@@ -1150,54 +1150,54 @@ export default function ReportPage(_props: ReportPageProps) {
         year_built: w.yearBuilt && w.yearBuilt !== "—" ? parseInt(w.yearBuilt) : null,
         zipcode: w.zipcode || null,
         management_program: w.managementProgram || null,
-        slug: null,
+        slug: undefined,
       };
       setBuilding(resolvedBldg);
 
       // Hydrate risk score from window
       setRiskScore({
-        building_id: resolvedBldg.id,
         risk_score: w.riskScore ?? 0,
         percentile: w.percentile ?? 0,
         risk_bucket: w.riskBucket ?? "Unknown",
-        open_pct: 0, recent_pct: 0, severity_pct: 0, age_pct: 0,
-        top_drivers: { drivers: (w.topDrivers || []).map((d: string) => ({ label: d, score: 0 })) },
-        updated_at: new Date().toISOString(),
+        top_drivers: { drivers: (w.topDrivers || []) },
       });
 
       // Hydrate building features from window
       setFeatures({
-        building_id: resolvedBldg.id,
         open_violations: w.openViolations ?? 0,
         recent_12m_violations: w.recent12m ?? 0,
         severity_points: 0,
-        avg_open_age_days: null,
-        updated_at: new Date().toISOString(),
+        avg_open_age_days: 0,
+        violation_density: 0,
+        avg_resolution_days: 0,
+        resolution_rate: 0,
         expired_tco: w.expiredTco ?? false,
         boiler_count: w.boilerCount ?? 0,
-        boiler_avg_missed_years: null,
+        boiler_avg_missed_years: 0,
         elevator_count: w.elevatorCount ?? 0,
-        elevator_avg_missed_years: null,
-        violation_density: null,
-        avg_resolution_days: null,
-        resolution_rate: null,
+        elevator_avg_missed_years: 0,
       });
 
       // Hydrate violations from window — flatten all sources into Violation[]
       const vw = w.violations || {};
-      const toViolations = (arr: any[], source: string, isOpen: boolean): Violation[] =>
-        (arr || []).map((v: any) => ({
+      const toViolations = (arr: any[], agencyLabel: string, isOpen: boolean): Violation[] => {
+        const agencyEnum = (agencyLabel === "HPD" || agencyLabel === "DOB" || agencyLabel === "ECB")
+          ? agencyLabel as Violation["agency"]
+          : agencyLabel === "OATH" ? "ECB" as const
+          : agencyLabel === "DSNY" || agencyLabel === "NYPD" ? "DOB" as const
+          : "HPD" as const;
+        return (arr || []).map((v: any) => ({
           id: v.id || "",
-          building_id: resolvedBldg.id,
-          source,
-          violation_type: v.cls || source,
+          agency: agencyEnum,
+          source: agencyLabel,
+          is_open: isOpen,
+          violation_type: v.cls || v.type || agencyLabel,
           description: v.desc || v.description || "",
-          issue_date: v.date || v.violation_date || v.issue_date || null,
-          status: isOpen ? "open" : "closed",
-          penalty_amount: v.penalty ?? null,
-          apartment: v.apt || null,
-          link: v.link || null,
+          issue_date: v.date || v.violation_date || v.issue_date || undefined,
+          penalty_amount: v.penalty ?? undefined,
+          disposition: v.status || undefined,
         }));
+      };
 
       const allViolations: Violation[] = [
         ...toViolations(vw.hpd?.open || [], "HPD", true),
