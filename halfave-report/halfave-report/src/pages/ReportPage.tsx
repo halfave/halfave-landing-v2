@@ -8,58 +8,7 @@ const supabase = createClient(
 ).schema("analytics");
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-interface Building {
-  id: string;
-  bin?: number | string | null;
-  bbl?: string | null;
-  address: string;
-  borough?: number | string | null;
-  stories?: number | null;
-  unit_count?: number | null;
-  year_built?: number | null;
-  zipcode?: string | null;
-  management_program?: string | null;
-  slug?: string;
-}
-
-interface RiskScore {
-  risk_score: number;
-  risk_bucket: string;
-  percentile: number;
-  top_drivers?: { drivers: string[] };
-}
-
-interface BuildingFeatures {
-  open_violations: number;
-  recent_12m_violations: number;
-  severity_points: number;
-  avg_open_age_days: number;
-  violation_density: number;
-  avg_resolution_days: number;
-  resolution_rate: number;
-  expired_tco: boolean;
-  boiler_count: number;
-  boiler_avg_missed_years: number;
-  elevator_count: number;
-  elevator_avg_missed_years: number;
-}
-
-interface Violation {
-  id: string;
-  agency: "HPD" | "DOB" | "ECB";
-  source: string;
-  severity?: string;
-  violation_type?: string;
-  description?: string;
-  is_open: boolean;
-  issue_date?: string;
-  close_date?: string;
-  violation_code?: string;
-  order_number?: string;
-  balance_due?: number;
-  penalty_amount?: number;
-  disposition?: string;
-}
+import type { Building, RiskScore, BuildingFeatures, Violation, BoroughStat, HalfaveWindow } from "../types";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const BOROUGH_NAMES: Record<string, string> = {
@@ -774,11 +723,6 @@ const CSS = `
 `;
 
 // ─── Borough data ─────────────────────────────────────────────────────────────
-interface BoroughStat {
-  name: string;
-  avg_score: number;
-  count: number;
-}
 
 function boroughScoreColor(score: number) {
   if (score >= 35) return "#c4533a";
@@ -1135,7 +1079,7 @@ export default function ReportPage(_props: ReportPageProps) {
     setLoading(true);
     setError(null);
     try {
-      const w = (window as any).__halfaveBldg;
+      const w = (window as HalfaveWindow).__halfaveBldg;
       if (!w?.bin) throw new Error("No building data found. Please search for a building first.");
 
       // Hydrate building from window
