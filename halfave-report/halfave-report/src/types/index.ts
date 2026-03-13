@@ -1,7 +1,5 @@
 // ─── Shared Types & Constants ─────────────────────────────────────────────────
-// Single source of truth for all shared data shapes, constants, and helpers.
 
-// ─── Risk bucket ─────────────────────────────────────────────────────────────
 export type RiskBucket = "Critical" | "High Risk" | "Elevated" | "Watch" | "Healthy";
 
 export const RISK_ORDER: RiskBucket[] = ["Critical", "High Risk", "Elevated", "Watch", "Healthy"];
@@ -14,7 +12,6 @@ export const RISK_COLORS: Record<string, string> = {
   Healthy:     "#3a7d5e",
 };
 
-// ─── Borough helpers ─────────────────────────────────────────────────────────
 export const BOROUGH_NAMES: Record<string | number, string> = {
   1: "Manhattan", 2: "Bronx", 3: "Brooklyn", 4: "Queens", 5: "Staten Island",
   MN: "Manhattan", BX: "Bronx", BK: "Brooklyn", QN: "Queens", SI: "Staten Island",
@@ -27,22 +24,20 @@ export interface Building {
   bbl?: string | null;
   address: string;
   borough?: number | string | null;
-  borough_name?: string | null;
+  borough_name?: string;        // string (not nullable) — useRiskData sorts on this
   stories?: number | null;
-  story_band?: string | null;
+  story_band?: string;          // string (not nullable) — useRiskData sorts on this
   unit_count?: number | null;
   year_built?: number | null;
   zipcode?: string | null;
   management_program?: string | null;
   slug?: string | null;
-  // Denormalised risk fields (set from window or Supabase join)
   risk_score?: number | null;
   risk_bucket?: RiskBucket | string | null;
   percentile?: number | null;
   top_drivers?: string[] | null;
 }
 
-// ─── Risk Score ──────────────────────────────────────────────────────────────
 export interface RiskScore {
   risk_score: number;
   risk_bucket: string;
@@ -50,7 +45,6 @@ export interface RiskScore {
   top_drivers?: { drivers: string[] };
 }
 
-// ─── Building Features ───────────────────────────────────────────────────────
 export interface BuildingFeatures {
   open_violations: number;
   recent_12m_violations: number;
@@ -66,7 +60,6 @@ export interface BuildingFeatures {
   elevator_avg_missed_years: number;
 }
 
-// ─── Violation ───────────────────────────────────────────────────────────────
 export interface Violation {
   id: string;
   agency: "HPD" | "DOB" | "ECB";
@@ -84,27 +77,33 @@ export interface Violation {
   disposition?: string;
 }
 
-// ─── Borough stat (peer comparison in ReportPage) ────────────────────────────
 export interface BoroughStat {
   name: string;
   avg_score: number;
   count: number;
 }
 
-// ─── useRiskData hook types ───────────────────────────────────────────────────
-export interface RiskSummary {
-  total: number;
-  byBucket: Record<string, number>;
-  avgScore: number;
-  p75Score: number;
-  p90Score: number;
-}
-
+// ─── useRiskData types ────────────────────────────────────────────────────────
+// PivotRow: accumulator keyed by borough/story_band/mgmt label,
+// with per-bucket counts, plus total and avg_score.
 export interface PivotRow {
   label: string;
-  count: number;
-  avgScore: number;
-  highRiskPct: number;
+  Critical: number;
+  "High Risk": number;
+  Elevated: number;
+  Watch: number;
+  Healthy: number;
+  avg_score: number;
+  total: number;
+}
+
+export interface RiskSummary {
+  total: number;
+  by_bucket: Record<RiskBucket, number>;
+  by_borough: PivotRow[];
+  by_story_band: PivotRow[];
+  by_mgmt: PivotRow[];
+  top_buildings: Building[];
 }
 
 // ─── window.__halfaveBldg ────────────────────────────────────────────────────
@@ -145,6 +144,4 @@ export interface HalfaveBldgWindow {
   co?: any | null;
 }
 
-// Use as: (window as HalfaveWindow).__halfaveBldg
-// Don't extend Window here to avoid conflict with declare global in MainSitePage
 export type HalfaveWindow = Window & { __halfaveBldg?: HalfaveBldgWindow };
