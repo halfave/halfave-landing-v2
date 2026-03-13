@@ -1,21 +1,48 @@
-// ─── Shared Types ─────────────────────────────────────────────────────────────
-// Single source of truth for all shared data shapes.
-// Import from here in ReportPage, RiskIndexPage, and any future pages.
+// ─── Shared Types & Constants ─────────────────────────────────────────────────
+// Single source of truth for all shared data shapes, constants, and helpers.
 
+// ─── Risk bucket ─────────────────────────────────────────────────────────────
+export type RiskBucket = "Critical" | "High Risk" | "Elevated" | "Watch" | "Healthy";
+
+export const RISK_ORDER: RiskBucket[] = ["Critical", "High Risk", "Elevated", "Watch", "Healthy"];
+
+export const RISK_COLORS: Record<string, string> = {
+  Critical:    "#c4533a",
+  "High Risk": "#d97b3a",
+  Elevated:    "#c9a227",
+  Watch:       "#7a8fa6",
+  Healthy:     "#3a7d5e",
+};
+
+// ─── Borough helpers ─────────────────────────────────────────────────────────
+export const BOROUGH_NAMES: Record<string | number, string> = {
+  1: "Manhattan", 2: "Bronx", 3: "Brooklyn", 4: "Queens", 5: "Staten Island",
+  MN: "Manhattan", BX: "Bronx", BK: "Brooklyn", QN: "Queens", SI: "Staten Island",
+};
+
+// ─── Building ─────────────────────────────────────────────────────────────────
 export interface Building {
   id: string;
   bin?: number | string | null;
   bbl?: string | null;
   address: string;
   borough?: number | string | null;
+  borough_name?: string | null;
   stories?: number | null;
+  story_band?: string | null;
   unit_count?: number | null;
   year_built?: number | null;
   zipcode?: string | null;
   management_program?: string | null;
-  slug?: string;
+  slug?: string | null;
+  // Denormalised risk fields (set from window or Supabase join)
+  risk_score?: number | null;
+  risk_bucket?: RiskBucket | string | null;
+  percentile?: number | null;
+  top_drivers?: string[] | null;
 }
 
+// ─── Risk Score ──────────────────────────────────────────────────────────────
 export interface RiskScore {
   risk_score: number;
   risk_bucket: string;
@@ -23,6 +50,7 @@ export interface RiskScore {
   top_drivers?: { drivers: string[] };
 }
 
+// ─── Building Features ───────────────────────────────────────────────────────
 export interface BuildingFeatures {
   open_violations: number;
   recent_12m_violations: number;
@@ -38,6 +66,7 @@ export interface BuildingFeatures {
   elevator_avg_missed_years: number;
 }
 
+// ─── Violation ───────────────────────────────────────────────────────────────
 export interface Violation {
   id: string;
   agency: "HPD" | "DOB" | "ECB";
@@ -55,38 +84,54 @@ export interface Violation {
   disposition?: string;
 }
 
-// Borough stat used in RiskIndexPage and ReportPage peer comparison
+// ─── Borough stat (peer comparison in ReportPage) ────────────────────────────
 export interface BoroughStat {
   name: string;
   avg_score: number;
   count: number;
 }
 
-// Shape of window.__halfaveBldg set by MainSite after a BIN lookup
+// ─── useRiskData hook types ───────────────────────────────────────────────────
+export interface RiskSummary {
+  total: number;
+  byBucket: Record<string, number>;
+  avgScore: number;
+  p75Score: number;
+  p90Score: number;
+}
+
+export interface PivotRow {
+  label: string;
+  count: number;
+  avgScore: number;
+  highRiskPct: number;
+}
+
+// ─── window.__halfaveBldg ────────────────────────────────────────────────────
 export interface HalfaveBldgWindow {
   bin: number | string;
   address: string;
   bbl: string;
-  stories: string;
-  units: string;
-  yearBuilt: string;
-  zipcode: string;
+  stories: string | number;
+  units: string | number;
+  yearBuilt?: string;
+  zipcode?: string;
   borough: string;
-  boroName: string;
-  managementProgram: string;
+  boroName?: string;
+  managementProgram?: string;
   riskScore: number;
   percentile: number;
   riskBucket: string;
-  openViolations: number;
-  recent12m: number;
-  balanceDue: number;
-  elevatorCount: number;
-  elevatorOverdue: number;
-  boilerCount: number;
-  expiredTco: boolean;
-  hpdBuildingId: string;
-  topDrivers: string[];
-  violations: {
+  openViolations?: number;
+  recent12m?: number;
+  balanceDue?: number;
+  elevatorCount?: number;
+  elevatorOverdue?: number;
+  boilerCount?: number;
+  expiredTco?: boolean;
+  hpdBuildingId?: string;
+  topDrivers?: string[];
+  violations?: {
     hpd: { open: any[]; closed: any[] };
     dob: { open: any[]; closed: any[] };
     ecb: { open: any[]; closed: any[] };
@@ -95,12 +140,11 @@ export interface HalfaveBldgWindow {
     dohmh: any[];
     nypd: any[];
   };
-  elevators: any[];
-  boilers: any[];
-  co: any | null;
+  elevators?: any[];
+  boilers?: any[];
+  co?: any | null;
 }
 
-// Extend Window so (window as HalfaveWindow).__halfaveBldg is typed
-export interface HalfaveWindow extends Window {
-  __halfaveBldg?: HalfaveBldgWindow;
-}
+// Use as: (window as HalfaveWindow).__halfaveBldg
+// Don't extend Window here to avoid conflict with declare global in MainSitePage
+export type HalfaveWindow = Window & { __halfaveBldg?: HalfaveBldgWindow };
