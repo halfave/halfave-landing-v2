@@ -671,6 +671,99 @@ const CSS = `
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* ── BOROUGH MAP ── */
+  .rp-borough-wrap {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 32px;
+    align-items: start;
+    padding: 24px;
+  }
+  .rp-borough-map-svg { width: 100%; height: auto; }
+  .rp-borough-path {
+    stroke: var(--cream);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+    cursor: default;
+    transition: opacity 0.15s;
+  }
+  .rp-borough-path:hover { opacity: 0.85; }
+  .rp-borough-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    fill: rgba(255,255,255,0.9);
+    text-anchor: middle;
+    pointer-events: none;
+    letter-spacing: 0.04em;
+  }
+  .rp-borough-score-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    fill: rgba(255,255,255,0.95);
+    text-anchor: middle;
+    pointer-events: none;
+  }
+  .rp-borough-bars { display: flex; flex-direction: column; gap: 0; }
+  .rp-borough-bar-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 52px 60px;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--navy-10);
+  }
+  .rp-borough-bar-row:last-child { border-bottom: none; }
+  .rp-borough-bar-name {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--navy);
+  }
+  .rp-borough-bar-track {
+    height: 6px;
+    background: var(--navy-10);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .rp-borough-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+  }
+  .rp-borough-bar-val {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    text-align: right;
+  }
+  .rp-borough-bar-count {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--slate);
+    text-align: right;
+  }
+  .rp-borough-legend {
+    display: flex;
+    gap: 16px;
+    padding: 12px 24px;
+    border-top: 1px solid var(--navy-10);
+    flex-wrap: wrap;
+  }
+  .rp-borough-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--slate);
+  }
+  .rp-borough-legend-dot {
+    width: 10px; height: 10px; border-radius: 2px;
+  }
+  @media (max-width: 680px) {
+    .rp-borough-wrap { grid-template-columns: 1fr; }
+  }
+
   @media (max-width: 600px) {
     .rp-kpi-row { flex-wrap: wrap; }
     .rp-kpi { padding: 0 16px; margin-bottom: 16px; }
@@ -680,7 +773,72 @@ const CSS = `
   }
 `;
 
+// ─── Borough data ─────────────────────────────────────────────────────────────
+interface BoroughStat {
+  name: string;
+  avg_score: number;
+  count: number;
+}
+
+function boroughScoreColor(score: number) {
+  if (score >= 35) return "#c4533a";
+  if (score >= 20) return "#c9a227";
+  return "#3a7d5e";
+}
+
 // ─── Driver icon/color map ────────────────────────────────────────────────────
+
+// ─── Accurate NYC Borough SVG Map ─────────────────────────────────────────────
+const BOROUGH_PATHS: Record<string, { d: string; labelX: number; labelY: number }> = {
+  Manhattan: {
+    d: "M138,42 L142,38 L147,36 L151,38 L154,44 L156,52 L157,62 L156,74 L154,86 L152,96 L150,108 L149,118 L148,126 L146,132 L143,136 L140,138 L137,134 L135,126 L134,116 L133,104 L133,92 L133,80 L133,68 L134,56 L136,48 Z",
+    labelX: 144, labelY: 90,
+  },
+  Bronx: {
+    d: "M138,42 L136,48 L134,56 L133,66 L128,64 L122,62 L116,60 L110,60 L104,62 L100,66 L98,72 L98,80 L100,86 L104,90 L110,92 L116,92 L122,90 L128,88 L133,86 L134,86 L136,74 L137,62 L139,52 Z",
+    labelX: 113, labelY: 76,
+  },
+  Queens: {
+    d: "M150,108 L152,96 L154,86 L156,86 L162,86 L168,84 L174,82 L180,82 L186,84 L192,88 L196,94 L198,100 L198,108 L196,114 L192,120 L186,124 L180,126 L174,128 L168,130 L163,134 L158,138 L154,140 L150,140 L148,136 L149,126 L149,118 Z",
+    labelX: 173, labelY: 108,
+  },
+  Brooklyn: {
+    d: "M148,136 L150,140 L154,140 L158,138 L163,134 L163,142 L162,150 L160,158 L157,166 L154,172 L150,178 L146,182 L142,184 L138,184 L134,182 L130,178 L128,172 L127,166 L127,158 L128,150 L130,142 L133,136 L137,134 L140,138 L143,136 L146,132 Z",
+    labelX: 144, labelY: 162,
+  },
+  "Staten Island": {
+    d: "M88,200 L94,194 L100,190 L108,188 L116,188 L122,192 L126,198 L128,206 L128,214 L126,222 L122,228 L116,232 L108,234 L100,232 L94,226 L90,218 L88,210 Z",
+    labelX: 108, labelY: 211,
+  },
+};
+
+function BoroughMap({ stats, highlight }: { stats: BoroughStat[]; highlight?: string }) {
+  const statMap = Object.fromEntries(stats.map((s) => [s.name, s]));
+  return (
+    <svg viewBox="0 0 300 320" className="rp-borough-map-svg" xmlns="http://www.w3.org/2000/svg">
+      {Object.entries(BOROUGH_PATHS).map(([name, { d, labelX, labelY }]) => {
+        const stat = statMap[name];
+        const color = stat ? boroughScoreColor(stat.avg_score) : "#cbd5e1";
+        const isHighlight = name === highlight;
+        return (
+          <g key={name}>
+            <path d={d} className="rp-borough-path" fill={color}
+              opacity={isHighlight ? 1 : 0.82} strokeWidth={isHighlight ? 2.5 : 1.5} />
+            <text x={labelX} y={labelY - 7} className="rp-borough-label">
+              {name === "Staten Island" ? "SI" : name}
+            </text>
+            {stat && (
+              <text x={labelX} y={labelY + 6} className="rp-borough-score-label">
+                {stat.avg_score.toFixed(1)}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 function driverMeta(d: string): { icon: string; bg: string; color: string } {
   const dl = d.toLowerCase();
   if (dl.includes("boiler")) return { icon: "🔥", bg: "#fdf0ed", color: "#c4533a" };
@@ -969,6 +1127,7 @@ export default function ReportPage(_props: ReportPageProps) {
   const [riskScore, setRiskScore] = useState<RiskScore | null>(null);
   const [features, setFeatures] = useState<BuildingFeatures | null>(null);
   const [violations, setViolations] = useState<Violation[]>([]);
+  const [boroughStats, setBoroughStats] = useState<BoroughStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -1016,6 +1175,34 @@ export default function ReportPage(_props: ReportPageProps) {
       if (rsRes.data) setRiskScore(rsRes.data);
       if (ftRes.data) setFeatures(ftRes.data);
       if (vRes.data) setViolations(vRes.data);
+
+      // Borough stats: join buildings + building_risk_scores
+      try {
+        const { data: boroughData } = await supabase
+          .from("buildings")
+          .select("borough, building_risk_scores(risk_score)");
+        if (boroughData) {
+          const boroughMap: Record<string, { total: number; count: number }> = {};
+          const boroughNameMap: Record<string, string> = {
+            "1": "Manhattan", "2": "Bronx", "3": "Brooklyn", "4": "Queens", "5": "Staten Island",
+            MN: "Manhattan", BX: "Bronx", BK: "Brooklyn", QN: "Queens", SI: "Staten Island",
+          };
+          for (const row of boroughData) {
+            const bName = boroughNameMap[String(row.borough)] ?? String(row.borough);
+            if (!bName) continue;
+            const scores = (row as any).building_risk_scores;
+            const score = Array.isArray(scores) ? scores[0]?.risk_score : scores?.risk_score;
+            if (score == null) continue;
+            if (!boroughMap[bName]) boroughMap[bName] = { total: 0, count: 0 };
+            boroughMap[bName].total += score;
+            boroughMap[bName].count += 1;
+          }
+          const stats: BoroughStat[] = Object.entries(boroughMap).map(([name, { total, count }]) => ({
+            name, avg_score: Math.round((total / count) * 10) / 10, count,
+          }));
+          setBoroughStats(stats);
+        }
+      } catch (_) { /* borough stats optional */ }
     } catch (e: any) {
       setError(e?.message || "Failed to load report.");
     } finally {
@@ -1297,6 +1484,65 @@ export default function ReportPage(_props: ReportPageProps) {
                     <div className="rp-stat-lbl">Balance due</div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+
+          {/* ── RISK BY BOROUGH ── */}
+          {boroughStats.length > 0 && (
+            <div className="rp-section">
+              <div className="rp-section-title">
+                Risk by Borough
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                  Average risk score
+                </span>
+              </div>
+              <div className="rp-card">
+                <div className="rp-borough-wrap">
+                  <BoroughMap stats={boroughStats} highlight={boroughName} />
+                  <div className="rp-borough-bars">
+                    {[...boroughStats]
+                      .sort((a, b) => b.avg_score - a.avg_score)
+                      .map((s) => (
+                        <div className="rp-borough-bar-row" key={s.name}>
+                          <span className="rp-borough-bar-name">{s.name}</span>
+                          <div className="rp-borough-bar-track">
+                            <div
+                              className="rp-borough-bar-fill"
+                              style={{
+                                width: `${(s.avg_score / 100) * 100}%`,
+                                background: boroughScoreColor(s.avg_score),
+                              }}
+                            />
+                          </div>
+                          <span
+                            className="rp-borough-bar-val"
+                            style={{ color: boroughScoreColor(s.avg_score) }}
+                          >
+                            {s.avg_score.toFixed(1)}
+                          </span>
+                          <span className="rp-borough-bar-count">
+                            {s.count.toLocaleString()} bldgs
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+                <div className="rp-borough-legend">
+                  <div className="rp-borough-legend-item">
+                    <div className="rp-borough-legend-dot" style={{ background: "#3a7d5e" }} />
+                    &lt; 20 — Low
+                  </div>
+                  <div className="rp-borough-legend-item">
+                    <div className="rp-borough-legend-dot" style={{ background: "#c9a227" }} />
+                    20–35 — Moderate
+                  </div>
+                  <div className="rp-borough-legend-item">
+                    <div className="rp-borough-legend-dot" style={{ background: "#c4533a" }} />
+                    &gt; 35 — Elevated
+                  </div>
+                </div>
               </div>
             </div>
           )}
