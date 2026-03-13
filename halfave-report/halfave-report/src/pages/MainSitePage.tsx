@@ -1,27 +1,14 @@
 import { useEffect } from 'react'
 import MainSite from './MainSite'
-import type { Building } from '../types'
+import type { Building, HalfaveWindow } from '../types'
 
 interface Props {
   onGetReport: (building: Building) => void
   onGoRisk?: () => void
 }
 
-declare global {
-  interface Window {
-    __halfaveBldg?: {
-      bin: number
-      address: string
-      bbl: string
-      stories: string | number
-      units: string | number
-      borough: string
-      riskScore: number
-      percentile: number
-      riskBucket: string
-    }
-  }
-}
+// Window type is augmented via HalfaveWindow in ../types
+// No local declare global needed — use (window as HalfaveWindow).__halfaveBldg
 
 export default function MainSitePage({ onGetReport, onGoRisk }: Props) {
   useEffect(() => {
@@ -50,7 +37,7 @@ export default function MainSitePage({ onGetReport, onGoRisk }: Props) {
           e.preventDefault()
           e.stopPropagation()
 
-          const bldg = window.__halfaveBldg
+          const bldg = (window as HalfaveWindow).__halfaveBldg
           if (!bldg) return
 
           const boroughMap: Record<string, number> = {
