@@ -72,6 +72,7 @@ export default function MainSitePage({ onGetReport, onGoRisk }: Props) {
             risk_bucket: bldg.riskBucket as Building['risk_bucket'] ?? 'Watch',
             percentile: bldg.percentile ?? 50,
             top_drivers: null,
+            bin: bldg.bin ?? null,
           }
 
           onGetReport(building)
