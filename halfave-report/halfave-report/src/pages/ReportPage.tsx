@@ -1,886 +1,1347 @@
-import React, { useState, useEffect } from 'react'
+import { useEffect, useState, useCallback } from "react";
+import { createClient } from "@supabase/supabase-js";
 
-import type { Building, PivotRow } from '../types'
-import { RISK_COLORS, RISK_ORDER } from '../types'
-import { useRiskData } from '../hooks/useRiskData'
-import { supabase } from '../lib/supabase'
+// ─── Supabase ────────────────────────────────────────────────────────────────
+const supabase = createClient(
+  "https://mjkkzniagexfooclqsjr.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qa2t6bmlhZ2V4Zm9vY2xxc2pyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3NDc4OTUsImV4cCI6MjA4NjMyMzg5NX0.RuaeazBn_IFWfXOlQ0ZDDTPsnTApNGmE_WpPi0o52gQ"
+).schema("analytics");
 
-interface Props {
-  building: Building
-  email: string
-  onReset: () => void
-  onGoRisk?: () => void
+// ─── Types ───────────────────────────────────────────────────────────────────
+interface Building {
+  id: string;
+  bin?: number | string | null;
+  bbl?: string | null;
+  address: string;
+  borough?: number | string | null;
+  stories?: number | null;
+  unit_count?: number | null;
+  year_built?: number | null;
+  zipcode?: string | null;
+  management_program?: string | null;
+  slug?: string;
 }
 
-// ─── Violation types ──────────────────────────────────────────────────────────
+interface RiskScore {
+  risk_score: number;
+  risk_bucket: string;
+  percentile: number;
+  top_drivers?: { drivers: string[] };
+}
+
+interface BuildingFeatures {
+  open_violations: number;
+  recent_12m_violations: number;
+  severity_points: number;
+  avg_open_age_days: number;
+  violation_density: number;
+  avg_resolution_days: number;
+  resolution_rate: number;
+  expired_tco: boolean;
+  boiler_count: number;
+  boiler_avg_missed_years: number;
+  elevator_count: number;
+  elevator_avg_missed_years: number;
+}
+
 interface Violation {
-  id: string
-  source: string
-  violation_type: string | null
-  violation_date: string | null
-  description: string | null
-  severity: string | null
-  category: string | null
-  is_open: boolean | null
-  disposition: string | null
-  balance_due: number | null
-  order_number: string | null
+  id: string;
+  agency: "HPD" | "DOB" | "ECB";
+  source: string;
+  severity?: string;
+  violation_type?: string;
+  description?: string;
+  is_open: boolean;
+  issue_date?: string;
+  close_date?: string;
+  violation_code?: string;
+  order_number?: string;
+  balance_due?: number;
+  penalty_amount?: number;
+  disposition?: string;
 }
 
-// ─── Violation tabs ───────────────────────────────────────────────────────────
-const SOURCE_LABELS: Record<string, string> = {
-  HPD: 'HPD — Housing',
-  DOB: 'DOB — Building',
-  ECB: 'ECB — Environmental',
-  Sanitation: 'Sanitation',
-  DOHMH: 'DOHMH — Health',
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const BOROUGH_NAMES: Record<string, string> = {
+  "1": "Manhattan",
+  "2": "Bronx",
+  "3": "Brooklyn",
+  "4": "Queens",
+  "5": "Staten Island",
+  MN: "Manhattan",
+  BX: "Bronx",
+  BK: "Brooklyn",
+  QN: "Queens",
+  SI: "Staten Island",
+};
+
+function getBoroughName(b?: number | string | null) {
+  if (!b) return "NYC";
+  return BOROUGH_NAMES[String(b)] ?? "NYC";
 }
 
-const SOURCE_ORDER = ['HPD', 'DOB', 'ECB', 'Sanitation', 'DOHMH']
-
-const SEVERITY_COLORS: Record<string, string> = {
-  'A': '#3a7d5e',
-  'B': '#c9a227',
-  'C': '#c4533a',
-  'I': '#c4533a',
-  'CLASS - 1': '#c4533a',
-  'CLASS - 2': '#d97b3a',
-  'Non-Hazardous': '#7a8fa6',
+function riskColor(percentile: number) {
+  if (percentile >= 75) return "var(--risk-red)";
+  if (percentile >= 50) return "var(--risk-amber)";
+  return "var(--risk-green)";
 }
 
-function severityLabel(v: Violation): string {
-  if (v.source === 'HPD') {
-    const map: Record<string, string> = { A: 'Non-Haz', B: 'Hazardous', C: 'Immediately Haz', I: 'Info' }
-    return map[v.severity ?? ''] ?? v.severity ?? '—'
+function riskBg(percentile: number) {
+  if (percentile >= 75) return "var(--risk-red-bg)";
+  if (percentile >= 50) return "var(--risk-amber-bg)";
+  return "var(--risk-green-bg)";
+}
+
+function severityWeight(s?: string) {
+  if (!s) return 0;
+  const u = s.toUpperCase();
+  if (u === "C" || u === "CLASS - 1") return 3;
+  if (u === "B" || u === "CLASS - 2") return 2;
+  return 1;
+}
+
+function severityLabel(s?: string, agency?: string) {
+  if (!s) return "–";
+  if (agency === "HPD") return `Class ${s}`;
+  if (s.startsWith("CLASS")) return s.replace("CLASS - ", "ECB Class ");
+  return s;
+}
+
+function severityColor(s?: string) {
+  const u = (s ?? "").toUpperCase();
+  if (u === "C" || u === "CLASS - 1") return "#c4533a";
+  if (u === "B" || u === "CLASS - 2") return "#d97b3a";
+  return "#c9a227";
+}
+
+function fmt(n?: number | null, fallback = "–") {
+  if (n == null) return fallback;
+  return n.toLocaleString();
+}
+
+function fmtDate(d?: string | null) {
+  if (!d) return "–";
+  return new Date(d).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function fmtCurrency(n?: number | null) {
+  if (!n) return "–";
+  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
+}
+
+// ─── CSS ─────────────────────────────────────────────────────────────────────
+const CSS = `
+  :root {
+    --navy: #111e30;
+    --cream: #f7f4ef;
+    --bg: #f0ede8;
+    --risk-red: #c4533a;
+    --risk-red-bg: #fdf0ed;
+    --risk-amber: #c9a227;
+    --risk-amber-bg: #fdf8ec;
+    --risk-green: #3a7d5e;
+    --risk-green-bg: #edf5f0;
+    --slate: #7a8fa6;
+    --navy-10: rgba(17,30,48,0.08);
+    --navy-20: rgba(17,30,48,0.15);
+    --font-serif: 'Lora', Georgia, serif;
+    --font-mono: 'DM Mono', 'Courier New', monospace;
+    --radius: 12px;
+    --radius-lg: 16px;
   }
-  if (v.severity === 'CLASS - 1') return 'Class 1'
-  if (v.severity === 'CLASS - 2') return 'Class 2'
-  return v.severity ?? '—'
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--navy); font-family: var(--font-serif); }
+
+  .rp-root { min-height: 100vh; background: var(--bg); }
+
+  /* ── HERO ── */
+  .rp-hero {
+    background: var(--navy);
+    padding: 48px 24px 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .rp-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 50% 120%, rgba(196,83,58,0.18) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .rp-hero-inner { max-width: 860px; margin: 0 auto; position: relative; }
+  .rp-hero-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--slate);
+    margin-bottom: 12px;
+  }
+  .rp-hero-address {
+    font-family: var(--font-serif);
+    font-size: clamp(22px, 4vw, 34px);
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.15;
+    margin-bottom: 6px;
+  }
+  .rp-hero-meta {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--slate);
+    margin-bottom: 36px;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .rp-hero-meta span::before { content: '· '; }
+  .rp-hero-meta span:first-child::before { content: ''; }
+
+  .rp-score-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 24px;
+    padding-bottom: 36px;
+    flex-wrap: wrap;
+  }
+  .rp-score-dial {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .rp-score-circle {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 30px;
+    font-weight: 700;
+    border: 3px solid;
+    position: relative;
+  }
+  .rp-score-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--slate);
+  }
+  .rp-score-badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-top: 6px;
+  }
+
+  .rp-kpi-row {
+    display: flex;
+    gap: 0;
+    border-left: 1px solid rgba(255,255,255,0.08);
+  }
+  .rp-kpi {
+    padding: 0 28px;
+    border-right: 1px solid rgba(255,255,255,0.08);
+  }
+  .rp-kpi-val {
+    font-family: var(--font-mono);
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+  }
+  .rp-kpi-lbl {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--slate);
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* ── SCORE BAND ── */
+  .rp-band {
+    height: 6px;
+    background: linear-gradient(to right, #3a7d5e 0%, #c9a227 50%, #c4533a 100%);
+    position: relative;
+    margin-top: 0;
+  }
+  .rp-band-marker {
+    position: absolute;
+    top: -4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    border: 3px solid var(--navy);
+    transform: translateX(-50%);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  }
+
+  /* ── BODY ── */
+  .rp-body { max-width: 860px; margin: 0 auto; padding: 36px 24px 80px; }
+
+  /* ── SECTION ── */
+  .rp-section { margin-bottom: 40px; }
+  .rp-section-title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--slate);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .rp-section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--navy-10);
+  }
+
+  /* ── CARD ── */
+  .rp-card {
+    background: var(--cream);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--navy-10);
+    overflow: hidden;
+  }
+
+  /* ── DRIVERS ── */
+  .rp-drivers { display: flex; flex-direction: column; gap: 0; }
+  .rp-driver {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--navy-10);
+    transition: background 0.15s;
+  }
+  .rp-driver:last-child { border-bottom: none; }
+  .rp-driver:hover { background: rgba(17,30,48,0.03); }
+  .rp-driver-idx {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--slate);
+    width: 20px;
+    flex-shrink: 0;
+    text-align: right;
+  }
+  .rp-driver-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .rp-driver-text {
+    font-family: var(--font-serif);
+    font-size: 14px;
+    color: var(--navy);
+    line-height: 1.4;
+  }
+
+  /* ── STATS GRID ── */
+  .rp-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1px;
+    background: var(--navy-10);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--navy-10);
+  }
+  .rp-stat {
+    background: var(--cream);
+    padding: 18px 20px;
+  }
+  .rp-stat-val {
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--navy);
+    line-height: 1;
+  }
+  .rp-stat-lbl {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--slate);
+    margin-top: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    line-height: 1.3;
+  }
+  .rp-stat-warn { color: var(--risk-red); }
+  .rp-stat-caution { color: var(--risk-amber); }
+  .rp-stat-ok { color: var(--risk-green); }
+
+  /* ── TABS ── */
+  .rp-tabs-nav {
+    display: flex;
+    gap: 0;
+    background: var(--navy-10);
+    border-radius: 10px;
+    padding: 3px;
+    margin-bottom: 16px;
+    width: fit-content;
+  }
+  .rp-tab-btn {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    padding: 7px 18px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    background: transparent;
+    color: var(--slate);
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .rp-tab-btn.active {
+    background: var(--cream);
+    color: var(--navy);
+    box-shadow: 0 1px 4px var(--navy-20);
+  }
+  .rp-tab-count {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: var(--navy-10);
+    color: var(--slate);
+  }
+  .rp-tab-btn.active .rp-tab-count {
+    background: var(--navy);
+    color: var(--cream);
+  }
+
+  /* ── VIOLATION SUMMARY ── */
+  .rp-vsummary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--navy-10);
+    border-radius: var(--radius) var(--radius) 0 0;
+    overflow: hidden;
+    border: 1px solid var(--navy-10);
+    border-bottom: none;
+  }
+  .rp-vsum-cell {
+    background: var(--cream);
+    padding: 14px 16px;
+    text-align: center;
+  }
+  .rp-vsum-num {
+    font-family: var(--font-mono);
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .rp-vsum-lbl {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--slate);
+    margin-top: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+  }
+
+  /* ── VIOLATION TABLE ── */
+  .rp-vtable-wrap {
+    border: 1px solid var(--navy-10);
+    border-radius: 0 0 var(--radius) var(--radius);
+    overflow: hidden;
+    background: var(--cream);
+  }
+  .rp-vtable { width: 100%; border-collapse: collapse; }
+  .rp-vtable thead th {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--slate);
+    padding: 10px 14px;
+    text-align: left;
+    background: var(--bg);
+    border-bottom: 1px solid var(--navy-10);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .rp-vtable thead th:hover { color: var(--navy); }
+  .rp-vtable thead th .sort-arrow { margin-left: 4px; opacity: 0.4; }
+  .rp-vtable thead th.sorted .sort-arrow { opacity: 1; }
+  .rp-vtable tbody tr {
+    border-bottom: 1px solid var(--navy-10);
+    transition: background 0.1s;
+  }
+  .rp-vtable tbody tr:last-child { border-bottom: none; }
+  .rp-vtable tbody tr:hover { background: rgba(17,30,48,0.03); }
+  .rp-vtable tbody tr.expandable { cursor: pointer; }
+  .rp-vtable td {
+    padding: 10px 14px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--navy);
+    vertical-align: top;
+  }
+  .rp-sev-badge {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .rp-status-dot {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+  }
+  .rp-status-dot::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .rp-status-dot.open::before { background: var(--risk-red); }
+  .rp-status-dot.closed::before { background: var(--risk-green); }
+  .rp-expand-row td {
+    background: rgba(17,30,48,0.03);
+    padding: 0;
+  }
+  .rp-expand-inner {
+    padding: 14px 20px;
+    font-family: var(--font-serif);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--navy);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 24px;
+  }
+  .rp-expand-field { display: flex; flex-direction: column; gap: 2px; }
+  .rp-expand-key {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--slate);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+  }
+  .rp-expand-desc {
+    grid-column: 1 / -1;
+    font-size: 13px;
+    line-height: 1.6;
+    padding-top: 4px;
+  }
+
+  /* ── LOAD MORE ── */
+  .rp-load-more {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    background: var(--bg);
+    border: none;
+    border-top: 1px solid var(--navy-10);
+    color: var(--slate);
+    cursor: pointer;
+    text-align: center;
+    transition: color 0.15s;
+  }
+  .rp-load-more:hover { color: var(--navy); }
+
+  /* ── ALERT CARD ── */
+  .rp-alert {
+    border-radius: var(--radius);
+    border: 1px solid;
+    padding: 14px 18px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+  .rp-alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .rp-alert-body {}
+  .rp-alert-title {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 3px;
+  }
+  .rp-alert-body p {
+    font-family: var(--font-serif);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .rp-alert.red { background: var(--risk-red-bg); border-color: rgba(196,83,58,0.25); color: var(--risk-red); }
+  .rp-alert.amber { background: var(--risk-amber-bg); border-color: rgba(201,162,39,0.25); color: #9a7a1a; }
+
+  /* ── PEER BARS ── */
+  .rp-peer-row {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--navy-10);
+  }
+  .rp-peer-row:last-child { border-bottom: none; }
+  .rp-peer-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .rp-peer-name {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--navy);
+  }
+  .rp-peer-val {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--navy);
+  }
+  .rp-peer-track {
+    height: 6px;
+    background: var(--navy-10);
+    border-radius: 3px;
+    position: relative;
+    overflow: visible;
+  }
+  .rp-peer-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 1s cubic-bezier(0.4,0,0.2,1);
+  }
+  .rp-peer-avg {
+    position: absolute;
+    top: -3px;
+    height: 12px;
+    width: 2px;
+    background: var(--slate);
+    border-radius: 1px;
+    opacity: 0.5;
+  }
+
+  /* ── LOADING / ERROR ── */
+  .rp-loading {
+    min-height: 60vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+    color: var(--slate);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+  }
+  .rp-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--navy-10);
+    border-top-color: var(--navy);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 600px) {
+    .rp-kpi-row { flex-wrap: wrap; }
+    .rp-kpi { padding: 0 16px; margin-bottom: 16px; }
+    .rp-vsummary { grid-template-columns: repeat(2, 1fr); }
+    .rp-expand-inner { grid-template-columns: 1fr; }
+    .rp-stats-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+`;
+
+// ─── Driver icon/color map ────────────────────────────────────────────────────
+function driverMeta(d: string): { icon: string; bg: string; color: string } {
+  const dl = d.toLowerCase();
+  if (dl.includes("boiler")) return { icon: "🔥", bg: "#fdf0ed", color: "#c4533a" };
+  if (dl.includes("elevator") || dl.includes("lift")) return { icon: "🏗️", bg: "#fdf0ed", color: "#c4533a" };
+  if (dl.includes("tco") || dl.includes("certificate")) return { icon: "📋", bg: "#fdf8ec", color: "#c9a227" };
+  if (dl.includes("open violation") || dl.includes("count")) return { icon: "⚠️", bg: "#fdf0ed", color: "#c4533a" };
+  if (dl.includes("recent") || dl.includes("12m") || dl.includes("trend")) return { icon: "📈", bg: "#fdf8ec", color: "#c9a227" };
+  if (dl.includes("age") || dl.includes("days")) return { icon: "🕐", bg: "#fdf8ec", color: "#c9a227" };
+  if (dl.includes("density")) return { icon: "📊", bg: "#fdf0ed", color: "#c4533a" };
+  if (dl.includes("severity") || dl.includes("class c") || dl.includes("class a")) return { icon: "🚨", bg: "#fdf0ed", color: "#c4533a" };
+  if (dl.includes("resolution") || dl.includes("resolve")) return { icon: "⏱️", bg: "#fdf8ec", color: "#c9a227" };
+  if (dl.includes("penalty") || dl.includes("balance") || dl.includes("fine")) return { icon: "💰", bg: "#fdf8ec", color: "#c9a227" };
+  return { icon: "⚡", bg: "#f0ede8", color: "#7a8fa6" };
 }
 
-function ViolationTabs({ buildingId }: { buildingId: string }) {
-  const [violations, setViolations] = useState<Violation[]>([])
-  const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('')
-
-  useEffect(() => {
-    async function load() {
-      const db = (supabase as any).schema('analytics')
-      const { data } = await db
-        .from('violations')
-        .select('id,source,violation_type,violation_date,description,severity,category,is_open,disposition,balance_due,order_number')
-        .eq('building_id', buildingId)
-        .order('violation_date', { ascending: false })
-      const rows: Violation[] = data ?? []
-      setViolations(rows)
-      // set default tab to source with most violations
-      const counts: Record<string, number> = {}
-      for (const r of rows) counts[r.source] = (counts[r.source] ?? 0) + 1
-      const first = SOURCE_ORDER.find(s => counts[s] > 0) ?? Object.keys(counts)[0] ?? ''
-      setActiveTab(first)
-      setLoading(false)
-    }
-    load()
-  }, [buildingId])
-
-  const grouped = violations.reduce<Record<string, Violation[]>>((acc, v) => {
-    if (!acc[v.source]) acc[v.source] = []
-    acc[v.source].push(v)
-    return acc
-  }, {})
-
-  const tabs = SOURCE_ORDER.filter(s => grouped[s]?.length)
-  const rows = grouped[activeTab] ?? []
-
-  if (loading) return (
-    <div style={vt.loading}>Loading violations…</div>
-  )
-
-  if (violations.length === 0) return (
-    <div style={vt.empty}>No violations on record for this building.</div>
-  )
+// ─── Violation Row ─────────────────────────────────────────────────────────────
+function ViolationRow({ v, expanded, onToggle }: {
+  v: Violation;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const sc = severityColor(v.severity);
+  const hasDetail = !!(v.description || v.order_number || v.penalty_amount || v.balance_due || v.disposition);
 
   return (
-    <div style={vt.wrap}>
-      {/* Tab bar */}
-      <div style={vt.tabBar}>
-        {tabs.map(src => (
-          <button
-            key={src}
-            style={{ ...vt.tab, ...(activeTab === src ? vt.tabActive : {}) }}
-            onClick={() => setActiveTab(src)}
+    <>
+      <tr className={hasDetail ? "expandable" : ""} onClick={hasDetail ? onToggle : undefined}>
+        <td>
+          <span
+            className="rp-sev-badge"
+            style={{ background: sc + "22", color: sc }}
           >
-            <span>{SOURCE_LABELS[src] ?? src}</span>
-            <span style={{ ...vt.tabBadge, ...(activeTab === src ? vt.tabBadgeActive : {}) }}>
-              {grouped[src].length}
+            {severityLabel(v.severity, v.agency)}
+          </span>
+        </td>
+        <td style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {v.violation_type || v.description?.slice(0, 60) || "–"}
+        </td>
+        <td>
+          <span className={`rp-status-dot ${v.is_open ? "open" : "closed"}`}>
+            {v.is_open ? "Open" : "Closed"}
+          </span>
+        </td>
+        <td style={{ color: "var(--slate)" }}>{fmtDate(v.issue_date)}</td>
+        <td style={{ textAlign: "right" }}>
+          {hasDetail && (
+            <span style={{ color: "var(--slate)", fontSize: 10 }}>
+              {expanded ? "▲" : "▼"}
             </span>
+          )}
+        </td>
+      </tr>
+      {expanded && hasDetail && (
+        <tr className="rp-expand-row">
+          <td colSpan={5}>
+            <div className="rp-expand-inner">
+              {v.description && (
+                <div className="rp-expand-field rp-expand-desc">
+                  <span className="rp-expand-key">Description</span>
+                  <span>{v.description}</span>
+                </div>
+              )}
+              {v.order_number && (
+                <div className="rp-expand-field">
+                  <span className="rp-expand-key">Order #</span>
+                  <span>{v.order_number}</span>
+                </div>
+              )}
+              {v.violation_code && (
+                <div className="rp-expand-field">
+                  <span className="rp-expand-key">Code</span>
+                  <span>{v.violation_code}</span>
+                </div>
+              )}
+              {v.penalty_amount != null && (
+                <div className="rp-expand-field">
+                  <span className="rp-expand-key">Penalty</span>
+                  <span>{fmtCurrency(v.penalty_amount)}</span>
+                </div>
+              )}
+              {v.balance_due != null && (
+                <div className="rp-expand-field">
+                  <span className="rp-expand-key">Balance Due</span>
+                  <span style={{ color: v.balance_due > 0 ? "var(--risk-red)" : undefined }}>
+                    {fmtCurrency(v.balance_due)}
+                  </span>
+                </div>
+              )}
+              {v.disposition && (
+                <div className="rp-expand-field">
+                  <span className="rp-expand-key">Disposition</span>
+                  <span>{v.disposition}</span>
+                </div>
+              )}
+              {v.close_date && (
+                <div className="rp-expand-field">
+                  <span className="rp-expand-key">Closed</span>
+                  <span>{fmtDate(v.close_date)}</span>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+// ─── Violation Tabs ────────────────────────────────────────────────────────────
+type SortKey = "severity" | "issue_date" | "is_open" | "violation_type";
+
+function ViolationTabs({ violations }: { violations: Violation[] }) {
+  const [tab, setTab] = useState<"HPD" | "DOB" | "ECB">("HPD");
+  const [sortKey, setSortKey] = useState<SortKey>("severity");
+  const [sortAsc, setSortAsc] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(20);
+
+  const byAgency = {
+    HPD: violations.filter((v) => v.agency === "HPD"),
+    DOB: violations.filter((v) => v.agency === "DOB"),
+    ECB: violations.filter((v) => v.agency === "ECB"),
+  };
+
+  const current = byAgency[tab];
+  const open = current.filter((v) => v.is_open);
+  const closed = current.filter((v) => !v.is_open);
+
+  const sorted = [...current].sort((a, b) => {
+    let cmp = 0;
+    if (sortKey === "severity") cmp = severityWeight(b.severity) - severityWeight(a.severity);
+    else if (sortKey === "issue_date") cmp = (b.issue_date ?? "").localeCompare(a.issue_date ?? "");
+    else if (sortKey === "is_open") cmp = (b.is_open ? 1 : 0) - (a.is_open ? 1 : 0);
+    else if (sortKey === "violation_type") cmp = (a.violation_type ?? "").localeCompare(b.violation_type ?? "");
+    return sortAsc ? -cmp : cmp;
+  });
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortAsc(!sortAsc);
+    else { setSortKey(key); setSortAsc(false); }
+    setPage(20);
+  }
+
+  function toggleExpand(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  const th = (label: string, key: SortKey) => (
+    <th
+      className={sortKey === key ? "sorted" : ""}
+      onClick={() => toggleSort(key)}
+    >
+      {label}
+      <span className="sort-arrow">{sortKey === key ? (sortAsc ? "↑" : "↓") : "↕"}</span>
+    </th>
+  );
+
+  const tabs: ("HPD" | "DOB" | "ECB")[] = ["HPD", "DOB", "ECB"];
+
+  return (
+    <div>
+      <div className="rp-tabs-nav">
+        {tabs.map((t) => (
+          <button
+            key={t}
+            className={`rp-tab-btn ${tab === t ? "active" : ""}`}
+            onClick={() => { setTab(t); setPage(20); }}
+          >
+            {t}
+            <span className="rp-tab-count">{byAgency[t].length}</span>
           </button>
         ))}
       </div>
 
-      {/* Table */}
-      <div style={vt.tableWrap}>
-        <table style={vt.table}>
-          <thead>
-            <tr>
-              <th style={vt.th}>Date</th>
-              {activeTab === 'HPD' && <th style={vt.th}>Order #</th>}
-              <th style={vt.th}>Description</th>
-              <th style={vt.th}>Severity</th>
-              <th style={vt.th}>Status</th>
-              {activeTab === 'ECB' && <th style={{ ...vt.th, textAlign: 'right' }}>Balance</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((v, i) => {
-              const sevColor = SEVERITY_COLORS[v.severity ?? ''] ?? '#7a8fa6'
-              const isOpen = v.disposition?.toLowerCase().includes('open') || v.is_open
-              return (
-                <tr key={v.id ?? i} style={{ borderBottom: '1px solid rgba(17,30,48,0.06)' }}>
-                  <td style={vt.tdDate}>
-                    {v.violation_date ? new Date(v.violation_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}
-                  </td>
-                  {activeTab === 'HPD' && (
-                    <td style={vt.tdMono}>{v.order_number ?? '—'}</td>
-                  )}
-                  <td style={vt.tdDesc}>{v.description ?? v.category ?? '—'}</td>
-                  <td style={vt.tdSev}>
-                    {v.severity ? (
-                      <span style={{ ...vt.sevBadge, color: sevColor, borderColor: sevColor }}>
-                        {severityLabel(v)}
-                      </span>
-                    ) : '—'}
-                  </td>
-                  <td style={vt.tdStatus}>
-                    <span style={{ ...vt.statusDot, background: isOpen ? '#c4533a' : '#3a7d5e' }} />
-                    {isOpen ? 'Open' : 'Resolved'}
-                  </td>
-                  {activeTab === 'ECB' && (
-                    <td style={{ ...vt.tdMono, textAlign: 'right' }}>
-                      {v.balance_due != null && v.balance_due > 0
-                        ? `$${Number(v.balance_due).toLocaleString()}`
-                        : '—'}
-                    </td>
-                  )}
+      {current.length === 0 ? (
+        <div style={{ padding: "32px 20px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--slate)" }}>
+          No {tab} violations on record
+        </div>
+      ) : (
+        <>
+          <div className="rp-vsummary">
+            <div className="rp-vsum-cell">
+              <div className="rp-vsum-num" style={{ color: "var(--risk-red)" }}>{open.length}</div>
+              <div className="rp-vsum-lbl">Open</div>
+            </div>
+            <div className="rp-vsum-cell">
+              <div className="rp-vsum-num" style={{ color: "var(--risk-green)" }}>{closed.length}</div>
+              <div className="rp-vsum-lbl">Closed</div>
+            </div>
+            <div className="rp-vsum-cell">
+              <div className="rp-vsum-num">{current.filter((v) => v.severity === "C" || v.severity === "CLASS - 1").length}</div>
+              <div className="rp-vsum-lbl">High Severity</div>
+            </div>
+          </div>
+          <div className="rp-vtable-wrap">
+            <table className="rp-vtable">
+              <thead>
+                <tr>
+                  {th("Severity", "severity")}
+                  {th("Type / Description", "violation_type")}
+                  {th("Status", "is_open")}
+                  {th("Issued", "issue_date")}
+                  <th></th>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {sorted.slice(0, page).map((v) => (
+                  <ViolationRow
+                    key={v.id}
+                    v={v}
+                    expanded={expanded.has(v.id)}
+                    onToggle={() => toggleExpand(v.id)}
+                  />
+                ))}
+              </tbody>
+            </table>
+            {sorted.length > page && (
+              <button className="rp-load-more" onClick={() => setPage((p) => p + 20)}>
+                Show more ({sorted.length - page} remaining)
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Peer Bar ─────────────────────────────────────────────────────────────────
+function PeerBar({
+  label,
+  value,
+  max,
+  avg,
+  format,
+  warningThreshold,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  avg: number;
+  format?: (n: number) => string;
+  warningThreshold?: number;
+}) {
+  const pct = Math.min((value / max) * 100, 100);
+  const avgPct = Math.min((avg / max) * 100, 100);
+  const isWarn = warningThreshold != null && value > warningThreshold;
+  const fillColor = isWarn ? "var(--risk-red)" : "var(--navy)";
+  const fmtFn = format ?? ((n: number) => String(Math.round(n)));
+
+  return (
+    <div className="rp-peer-row">
+      <div className="rp-peer-label">
+        <span className="rp-peer-name">{label}</span>
+        <span className="rp-peer-val" style={{ color: isWarn ? "var(--risk-red)" : undefined }}>
+          {fmtFn(value)}
+        </span>
+      </div>
+      <div className="rp-peer-track">
+        <div
+          className="rp-peer-fill"
+          style={{ width: `${pct}%`, background: fillColor }}
+        />
+        <div className="rp-peer-avg" style={{ left: `${avgPct}%` }} title={`NYC avg: ${fmtFn(avg)}`} />
       </div>
     </div>
-  )
+  );
 }
 
-const vt: Record<string, React.CSSProperties> = {
-  wrap: {
-    background: 'var(--white)', borderRadius: 'var(--radius-lg)',
-    border: '1px solid var(--navy-20)', overflow: 'hidden',
-  },
-  tabBar: {
-    display: 'flex', overflowX: 'auto', borderBottom: '1px solid var(--navy-20)',
-    background: 'rgba(17,30,48,0.02)',
-  },
-  tab: {
-    display: 'flex', alignItems: 'center', gap: 8,
-    padding: '12px 20px', border: 'none', borderBottom: '2px solid transparent',
-    background: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-    fontFamily: 'var(--font-mono)', fontSize: '0.72rem',
-    color: 'var(--navy)', opacity: 0.45, transition: 'all 0.15s',
-  },
-  tabActive: {
-    opacity: 1, borderBottomColor: 'var(--navy)',
-    background: 'var(--white)',
-  },
-  tabBadge: {
-    background: 'rgba(17,30,48,0.08)', color: 'var(--navy)',
-    borderRadius: 99, padding: '1px 7px',
-    fontFamily: 'var(--font-mono)', fontSize: '0.65rem',
-  },
-  tabBadgeActive: {
-    background: 'var(--navy)', color: 'var(--cream)',
-  },
-  tableWrap: { overflowX: 'auto', maxHeight: 420, overflowY: 'auto' },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' },
-  th: {
-    fontFamily: 'var(--font-mono)', fontSize: '0.62rem', textTransform: 'uppercase',
-    letterSpacing: '0.08em', opacity: 0.4, padding: '10px 16px',
-    textAlign: 'left', borderBottom: '1px solid var(--navy-20)',
-    position: 'sticky' as const, top: 0, background: 'var(--white)',
-  },
-  tdDate: { padding: '11px 16px', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', opacity: 0.6, whiteSpace: 'nowrap', verticalAlign: 'top' },
-  tdMono: { padding: '11px 16px', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', opacity: 0.55, whiteSpace: 'nowrap', verticalAlign: 'top' },
-  tdDesc: { padding: '11px 16px', lineHeight: 1.5, maxWidth: 420, verticalAlign: 'top', fontSize: '0.8rem' },
-  tdSev: { padding: '11px 16px', whiteSpace: 'nowrap', verticalAlign: 'top' },
-  tdStatus: {
-    padding: '11px 16px', fontFamily: 'var(--font-mono)', fontSize: '0.72rem',
-    whiteSpace: 'nowrap', verticalAlign: 'top', display: 'flex', alignItems: 'center', gap: 6,
-  },
-  sevBadge: {
-    fontFamily: 'var(--font-mono)', fontSize: '0.62rem', textTransform: 'uppercase',
-    letterSpacing: '0.06em', border: '1px solid', borderRadius: 99, padding: '2px 8px',
-  },
-  statusDot: { width: 6, height: 6, borderRadius: '50%', display: 'inline-block', flexShrink: 0 },
-  loading: { padding: 32, fontFamily: 'var(--font-mono)', fontSize: '0.8rem', opacity: 0.4, textAlign: 'center' },
-  empty: { padding: 32, fontFamily: 'var(--font-mono)', fontSize: '0.8rem', opacity: 0.4, textAlign: 'center' },
-}
+// ─── Main ReportPage ──────────────────────────────────────────────────────────
+export default function ReportPage() {
+  const [building, setBuilding] = useState<Building | null>(null);
+  const [riskScore, setRiskScore] = useState<RiskScore | null>(null);
+  const [features, setFeatures] = useState<BuildingFeatures | null>(null);
+  const [violations, setViolations] = useState<Violation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-// ─── NYC Borough SVG Map ──────────────────────────────────────────────────────
-// Simplified borough outlines as SVG paths (schematic, not geographic)
-const BOROUGH_PATHS: Record<string, { path: string; label: string; cx: number; cy: number }> = {
-  Manhattan: {
-    path: 'M 185 60 L 195 55 L 205 58 L 210 80 L 215 110 L 218 140 L 215 170 L 208 195 L 200 210 L 192 215 L 185 210 L 178 195 L 172 170 L 170 140 L 172 110 L 178 80 Z',
-    label: 'Manhattan', cx: 192, cy: 135,
-  },
-  Bronx: {
-    path: 'M 185 60 L 195 55 L 220 45 L 260 42 L 290 50 L 300 70 L 295 95 L 275 105 L 250 110 L 225 108 L 210 100 L 210 80 L 205 58 Z',
-    label: 'Bronx', cx: 248, cy: 75,
-  },
-  Brooklyn: {
-    path: 'M 172 195 L 185 210 L 192 215 L 200 210 L 210 215 L 225 218 L 255 220 L 275 215 L 285 205 L 288 190 L 280 175 L 265 168 L 245 165 L 225 162 L 208 160 L 195 165 L 185 175 Z',
-    label: 'Brooklyn', cx: 232, cy: 193,
-  },
-  Queens: {
-    path: 'M 210 80 L 225 108 L 250 110 L 275 105 L 295 95 L 310 100 L 320 118 L 318 140 L 310 158 L 295 168 L 275 172 L 255 175 L 240 172 L 225 168 L 210 160 L 208 160 L 210 130 L 215 110 L 218 140 L 215 110 Z',
-    label: 'Queens', cx: 268, cy: 138,
-  },
-  'Staten Island': {
-    path: 'M 105 215 L 120 205 L 140 200 L 158 202 L 165 215 L 162 235 L 150 250 L 130 255 L 112 248 L 100 235 Z',
-    label: 'SI', cx: 133, cy: 228,
-  },
-}
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Get BIN from URL params or window global
+      const params = new URLSearchParams(window.location.search);
+      const bin = params.get("bin") || (window as any).__halfaveBldg?.bin;
+      if (!bin) throw new Error("No building BIN specified.");
 
-const BOROUGH_COLORS = {
-  low: '#3a7d5e',
-  mid: '#c9a227',
-  high: '#c4533a',
-}
+      // Fetch building
+      const { data: bldgs, error: bErr } = await supabase
+        .from("buildings")
+        .select("*")
+        .eq("bin", bin)
+        .limit(1);
+      if (bErr) throw bErr;
+      if (!bldgs?.length) throw new Error(`No building found for BIN ${bin}`);
+      const bldg = bldgs[0];
+      setBuilding(bldg);
 
-function boroughScoreColor(score: number): string {
-  if (score >= 35) return BOROUGH_COLORS.high
-  if (score >= 20) return BOROUGH_COLORS.mid
-  return BOROUGH_COLORS.low
-}
+      const buildingId = bldg.id;
 
-interface BoroughMapProps {
-  rows: PivotRow[]
-}
+      // Parallel: risk score + features + violations
+      const [rsRes, ftRes, vRes] = await Promise.all([
+        supabase
+          .from("building_risk_scores")
+          .select("*")
+          .eq("building_id", buildingId)
+          .single(),
+        supabase
+          .from("building_features")
+          .select("*")
+          .eq("building_id", buildingId)
+          .single(),
+        supabase
+          .from("violations")
+          .select("*")
+          .eq("building_id", buildingId)
+          .order("issue_date", { ascending: false }),
+      ]);
 
-function NYCBoroughMap({ rows }: BoroughMapProps) {
-  const [hovered, setHovered] = useState<string | null>(null)
+      if (rsRes.data) setRiskScore(rsRes.data);
+      if (ftRes.data) setFeatures(ftRes.data);
+      if (vRes.data) setViolations(vRes.data);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load report.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  // Compute avg score per borough from pivot rows
-  const avgByBorough: Record<string, number> = {}
-  for (const r of rows) {
-    avgByBorough[r.label] = r.avg_score
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  if (loading) {
+    return (
+      <>
+        <style>{CSS}</style>
+        <div className="rp-root">
+          <div className="rp-loading">
+            <div className="rp-spinner" />
+            <span>LOADING REPORT</span>
+          </div>
+        </div>
+      </>
+    );
   }
 
-  return (
-    <div style={bmap.wrap}>
-      <div style={bmap.mapArea}>
-        <svg viewBox="70 35 270 235" style={{ width: '100%', maxWidth: 380 }} xmlns="http://www.w3.org/2000/svg">
-          {Object.entries(BOROUGH_PATHS).map(([name, def]) => {
-            const score = avgByBorough[name] ?? 0
-            const fill = boroughScoreColor(score)
-            const isHovered = hovered === name
-            return (
-              <g key={name} onMouseEnter={() => setHovered(name)} onMouseLeave={() => setHovered(null)}
-                style={{ cursor: 'pointer' }}>
-                <path
-                  d={def.path}
-                  fill={fill}
-                  fillOpacity={isHovered ? 0.9 : 0.6}
-                  stroke="var(--cream)"
-                  strokeWidth={isHovered ? 2 : 1.5}
-                  style={{ transition: 'all 0.15s' }}
-                />
-                <text
-                  x={def.cx} y={def.cy - 6}
-                  textAnchor="middle"
-                  style={{ fontFamily: 'var(--font-mono)', fontSize: '7px', fill: 'var(--cream)', fontWeight: 600, pointerEvents: 'none' }}
-                >
-                  {def.label}
-                </text>
-                <text
-                  x={def.cx} y={def.cy + 5}
-                  textAnchor="middle"
-                  style={{ fontFamily: 'var(--font-mono)', fontSize: '8px', fill: 'var(--cream)', opacity: 0.9, pointerEvents: 'none' }}
-                >
-                  {score > 0 ? score.toFixed(1) : '—'}
-                </text>
-              </g>
-            )
-          })}
-        </svg>
-
-        {/* Legend */}
-        <div style={bmap.legend}>
-          {[
-            { color: BOROUGH_COLORS.low, label: '< 20 — Low' },
-            { color: BOROUGH_COLORS.mid, label: '20–35 — Moderate' },
-            { color: BOROUGH_COLORS.high, label: '> 35 — Elevated' },
-          ].map(l => (
-            <div key={l.label} style={bmap.legendRow}>
-              <span style={{ ...bmap.legendDot, background: l.color }} />
-              <span style={bmap.legendLabel}>{l.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Hover tooltip / bar list */}
-      <div style={bmap.sidebar}>
-        <div style={bmap.sidebarTitle}>Avg risk score by borough</div>
-        {rows.map(r => {
-          const color = boroughScoreColor(r.avg_score)
-          const isActive = hovered === r.label
-          return (
-            <div key={r.label}
-              style={{ ...bmap.boroughRow, ...(isActive ? bmap.boroughRowActive : {}) }}
-              onMouseEnter={() => setHovered(r.label)}
-              onMouseLeave={() => setHovered(null)}
-            >
-              <div style={bmap.boroughLabel}>{r.label}</div>
-              <div style={bmap.barTrack}>
-                <div style={{ ...bmap.barFill, width: `${(r.avg_score / 50) * 100}%`, background: color }} />
-              </div>
-              <div style={{ ...bmap.boroughScore, color }}>{r.avg_score.toFixed(1)}</div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-const bmap: Record<string, React.CSSProperties> = {
-  wrap: {
-    background: 'var(--white)', borderRadius: 'var(--radius-lg)',
-    border: '1px solid var(--navy-20)', padding: 24,
-    display: 'flex', gap: 32, flexWrap: 'wrap', alignItems: 'flex-start',
-  },
-  mapArea: { flex: '0 0 auto', display: 'flex', flexDirection: 'column', gap: 16 },
-  legend: { display: 'flex', flexDirection: 'column', gap: 6 },
-  legendRow: { display: 'flex', alignItems: 'center', gap: 8 },
-  legendDot: { width: 10, height: 10, borderRadius: 2, flexShrink: 0 },
-  legendLabel: { fontFamily: 'var(--font-mono)', fontSize: '0.65rem', opacity: 0.6 },
-  sidebar: { flex: 1, minWidth: 200, display: 'flex', flexDirection: 'column', gap: 10 },
-  sidebarTitle: {
-    fontFamily: 'var(--font-serif)', fontSize: '0.95rem', fontWeight: 600,
-    marginBottom: 6, letterSpacing: '-0.01em',
-  },
-  boroughRow: {
-    display: 'flex', alignItems: 'center', gap: 10,
-    padding: '6px 8px', borderRadius: 6, cursor: 'default',
-    transition: 'background 0.12s',
-  },
-  boroughRowActive: { background: 'rgba(17,30,48,0.04)' },
-  boroughLabel: {
-    fontFamily: 'var(--font-mono)', fontSize: '0.72rem', width: 100, flexShrink: 0, opacity: 0.7,
-  },
-  barTrack: { flex: 1, height: 6, background: 'rgba(17,30,48,0.08)', borderRadius: 99, overflow: 'hidden' },
-  barFill: { height: '100%', borderRadius: 99, transition: 'width 0.6s ease' },
-  boroughScore: { fontFamily: 'var(--font-mono)', fontSize: '0.8rem', fontWeight: 500, width: 32, textAlign: 'right' },
-}
-
-// ─── Ownership comparison (PVT vs NYCHA avg) ─────────────────────────────────
-function OwnershipCard({ rows }: { rows: PivotRow[] }) {
-  const pvt = rows.find(r => r.label === 'PVT')
-  const nycha = rows.find(r => r.label === 'NYCHA')
-  if (!pvt && !nycha) return null
-
-  const entries = [
-    pvt && { label: 'Private (PVT)', sublabel: `${pvt.total} buildings`, score: pvt.avg_score, color: '#7a8fa6' },
-    nycha && { label: 'NYCHA', sublabel: `${nycha.total} buildings`, score: nycha.avg_score, color: '#c9a227' },
-  ].filter(Boolean) as { label: string; sublabel: string; score: number; color: string }[]
-
-  const max = Math.max(...entries.map(e => e.score), 40)
-
-  return (
-    <div style={own.wrap}>
-      <div style={own.header}>
-        <h3 style={own.title}>Ownership type: average risk</h3>
-        <p style={own.sub}>Comparing private vs. public housing portfolios by average risk score</p>
-      </div>
-      <div style={own.cards}>
-        {entries.map(e => (
-          <div key={e.label} style={own.card}>
-            <div style={own.cardLabel}>{e.label}</div>
-            <div style={own.cardSub}>{e.sublabel}</div>
-            <div style={own.cardBarTrack}>
-              <div style={{ ...own.cardBarFill, width: `${(e.score / max) * 100}%`, background: e.color }} />
-            </div>
-            <div style={{ ...own.cardScore, color: e.color }}>{e.score.toFixed(1)}</div>
-            <div style={own.cardScoreLabel}>avg risk score</div>
+  if (error || !building) {
+    return (
+      <>
+        <style>{CSS}</style>
+        <div className="rp-root">
+          <div className="rp-loading">
+            <span style={{ color: "var(--risk-red)" }}>⚠ {error || "Report unavailable"}</span>
           </div>
-        ))}
-      </div>
-    </div>
-  )
-}
+        </div>
+      </>
+    );
+  }
 
-const own: Record<string, React.CSSProperties> = {
-  wrap: {
-    background: 'var(--white)', borderRadius: 'var(--radius-lg)',
-    border: '1px solid var(--navy-20)', padding: 28,
-  },
-  header: { marginBottom: 24 },
-  title: { fontFamily: 'var(--font-serif)', fontSize: '1rem', fontWeight: 600, letterSpacing: '-0.01em', marginBottom: 6 },
-  sub: { fontFamily: 'var(--font-mono)', fontSize: '0.7rem', opacity: 0.45, lineHeight: 1.5 },
-  cards: { display: 'flex', gap: 20, flexWrap: 'wrap' },
-  card: {
-    flex: 1, minWidth: 180,
-    padding: '20px 24px', borderRadius: 'var(--radius)',
-    border: '1px solid var(--navy-20)', background: 'rgba(17,30,48,0.015)',
-  },
-  cardLabel: { fontFamily: 'var(--font-serif)', fontWeight: 600, fontSize: '1.05rem', marginBottom: 4 },
-  cardSub: { fontFamily: 'var(--font-mono)', fontSize: '0.65rem', opacity: 0.4, marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.06em' },
-  cardBarTrack: { height: 6, background: 'rgba(17,30,48,0.08)', borderRadius: 99, overflow: 'hidden', marginBottom: 12 },
-  cardBarFill: { height: '100%', borderRadius: 99, transition: 'width 0.6s ease' },
-  cardScore: { fontFamily: 'var(--font-mono)', fontSize: '2rem', fontWeight: 500, lineHeight: 1 },
-  cardScoreLabel: { fontFamily: 'var(--font-mono)', fontSize: '0.65rem', opacity: 0.35, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4 },
-}
+  const rs = riskScore;
+  const pct = rs?.percentile ?? 0;
+  const score = rs?.risk_score ?? 0;
+  const bucket = rs?.risk_bucket ?? "Unknown";
+  const drivers = rs?.top_drivers?.drivers ?? [];
+  const boroughName = getBoroughName(building.borough);
 
-// ─── Risk scoring explainer ───────────────────────────────────────────────────
-const SCORING_FACTORS = [
-  {
-    key: 'Open Violations',
-    weight: '35%',
-    color: '#c4533a',
-    desc: 'Count of currently unresolved HPD, DOB, and ECB violations. Open violations signal active, unaddressed hazards. A building with 10+ open violations scores near the maximum on this dimension.',
-  },
-  {
-    key: 'Recent Activity',
-    weight: '25%',
-    color: '#d97b3a',
-    desc: 'Violations issued in the last 12 months. Recent activity indicates deteriorating conditions or a landlord unwilling or unable to maintain code compliance. Recency is weighted heavily because it reflects the current trajectory.',
-  },
-  {
-    key: 'Severity Points',
-    weight: '25%',
-    color: '#c9a227',
-    desc: 'A weighted tally of violation severity. Class C / Immediately Hazardous HPD violations and ECB Class 1 violations carry the most weight (5–10×). Class B hazardous violations carry moderate weight. Non-hazardous violations contribute minimally.',
-  },
-  {
-    key: 'Unresolved Duration',
-    weight: '15%',
-    color: '#7a8fa6',
-    desc: 'Average age of open violations in days. A violation that has been open for 2+ years signals systemic neglect and is treated as a persistent risk factor, even if it scores low on severity.',
-  },
-]
+  const openViolations = features?.open_violations ?? violations.filter((v) => v.is_open).length;
+  const recent12m = features?.recent_12m_violations ?? 0;
 
-function ScoringExplainer({ building }: { building: Building }) {
-  const drivers = building.top_drivers as Record<string, number> | null
+  // Financial exposure
+  const totalBalance = violations.reduce((s, v) => s + (v.balance_due ?? 0), 0);
+  const totalPenalty = violations.reduce((s, v) => s + (v.penalty_amount ?? 0), 0);
+
+  const scoreColor = riskColor(pct);
+  const scoreBg = riskBg(pct);
+  const bandPct = (score / 100) * 100;
+
+  // Peer comparison data (NYC averages rough estimates)
+  const peerRows = features
+    ? [
+        {
+          label: "Open Violations",
+          value: features.open_violations,
+          max: 120,
+          avg: 8,
+          warningThreshold: 15,
+        },
+        {
+          label: "Avg Days Open",
+          value: Math.round(features.avg_open_age_days),
+          max: 1000,
+          avg: 180,
+          warningThreshold: 365,
+          format: (n: number) => `${n}d`,
+        },
+        {
+          label: "Violation Density",
+          value: features.violation_density,
+          max: 3,
+          avg: 0.3,
+          warningThreshold: 0.8,
+          format: (n: number) => n.toFixed(2),
+        },
+        {
+          label: "Resolution Rate",
+          value: features.resolution_rate,
+          max: 1,
+          avg: 0.65,
+          format: (n: number) => `${Math.round(n * 100)}%`,
+        },
+      ]
+    : [];
 
   return (
-    <div style={sc.wrap}>
-      <div style={sc.header}>
-        <h3 style={sc.title}>How the risk score is calculated</h3>
-        <p style={sc.intro}>
-          Each building's risk score is a weighted composite of four factors drawn from HPD, DOB, and ECB violation records.
-          Scores are normalized across all 978 buildings in the index so that 50 = median risk.
-        </p>
-      </div>
+    <>
+      <style>{CSS}</style>
+      <div className="rp-root">
+        {/* ── HERO ── */}
+        <div className="rp-hero">
+          <div className="rp-hero-inner">
+            <div className="rp-hero-eyebrow">NYC Building Risk Report · Half Ave</div>
+            <div className="rp-hero-address">{building.address}</div>
+            <div className="rp-hero-meta">
+              <span>{boroughName}</span>
+              {building.zipcode && <span>{building.zipcode}</span>}
+              {building.stories && <span>{building.stories} stories</span>}
+              {building.unit_count && <span>{building.unit_count} units</span>}
+              {building.year_built && <span>Built {building.year_built}</span>}
+              {building.bin && <span>BIN {building.bin}</span>}
+            </div>
 
-      <div style={sc.factors}>
-        {SCORING_FACTORS.map(f => {
-          const driverVal = drivers?.[f.key.toLowerCase().replace(/ /g, '_')] as number | undefined
-          return (
-            <div key={f.key} style={sc.factor}>
-              <div style={sc.factorTop}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ ...sc.dot, background: f.color }} />
-                  <span style={sc.factorName}>{f.key}</span>
+            <div className="rp-score-row">
+              <div className="rp-score-dial">
+                <div
+                  className="rp-score-circle"
+                  style={{ color: scoreColor, borderColor: scoreColor, background: scoreBg }}
+                >
+                  {score}
                 </div>
-                <span style={{ ...sc.weight, color: f.color }}>{f.weight}</span>
-              </div>
-              <div style={sc.barRow}>
-                <div style={sc.barTrack}>
-                  <div style={{ ...sc.barFill, width: f.weight, background: f.color + '40', border: `1px solid ${f.color}40` }} />
+                <div className="rp-score-label">Risk Score</div>
+                <div
+                  className="rp-score-badge"
+                  style={{ background: scoreColor + "22", color: scoreColor }}
+                >
+                  {bucket}
                 </div>
               </div>
-              <p style={sc.factorDesc}>{f.desc}</p>
-              {driverVal !== undefined && (
-                <div style={{ ...sc.driverTag, borderColor: f.color + '60', color: f.color }}>
-                  This building's contribution: <strong>{Math.round(driverVal * 100)}%</strong> of total score
+
+              <div className="rp-kpi-row">
+                <div className="rp-kpi">
+                  <div className="rp-kpi-val">{fmt(openViolations)}</div>
+                  <div className="rp-kpi-lbl">Open Violations</div>
+                </div>
+                <div className="rp-kpi">
+                  <div className="rp-kpi-val">{fmt(recent12m)}</div>
+                  <div className="rp-kpi-lbl">Last 12 Months</div>
+                </div>
+                <div className="rp-kpi">
+                  <div className="rp-kpi-val">{pct >= 99 ? "99.9" : pct.toFixed(0)}th</div>
+                  <div className="rp-kpi-lbl">Percentile</div>
+                </div>
+                {totalBalance > 0 && (
+                  <div className="rp-kpi">
+                    <div className="rp-kpi-val" style={{ color: "var(--risk-red)" }}>
+                      {fmtCurrency(totalBalance)}
+                    </div>
+                    <div className="rp-kpi-lbl">Balance Due</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Score band */}
+          <div style={{ maxWidth: 860, margin: "0 auto" }}>
+            <div className="rp-band">
+              <div className="rp-band-marker" style={{ left: `${bandPct}%` }} />
+            </div>
+          </div>
+        </div>
+
+        {/* ── BODY ── */}
+        <div className="rp-body">
+
+          {/* ── ALERTS ── */}
+          {(features?.expired_tco || (features?.boiler_avg_missed_years ?? 0) > 1 || (features?.elevator_avg_missed_years ?? 0) > 1) && (
+            <div className="rp-section">
+              <div className="rp-section-title">Active Alerts</div>
+              {features?.expired_tco && (
+                <div className="rp-alert red">
+                  <div className="rp-alert-icon">📋</div>
+                  <div className="rp-alert-body">
+                    <div className="rp-alert-title">Expired or Missing TCO</div>
+                    <p>This building's Temporary Certificate of Occupancy has expired. Residents may be occupying a building without valid authorization.</p>
+                  </div>
+                </div>
+              )}
+              {(features?.boiler_avg_missed_years ?? 0) > 1 && (
+                <div className="rp-alert red">
+                  <div className="rp-alert-icon">🔥</div>
+                  <div className="rp-alert-body">
+                    <div className="rp-alert-title">Boiler Inspection Overdue</div>
+                    <p>
+                      {features!.boiler_count} boiler{features!.boiler_count !== 1 ? "s" : ""} averaging{" "}
+                      {features!.boiler_avg_missed_years.toFixed(1)} missed inspection year{features!.boiler_avg_missed_years !== 1 ? "s" : ""}.
+                    </p>
+                  </div>
+                </div>
+              )}
+              {(features?.elevator_avg_missed_years ?? 0) > 1 && (
+                <div className="rp-alert amber">
+                  <div className="rp-alert-icon">🏗️</div>
+                  <div className="rp-alert-body">
+                    <div className="rp-alert-title">Elevator Inspection Overdue</div>
+                    <p>
+                      {features!.elevator_count} elevator{features!.elevator_count !== 1 ? "s" : ""} averaging{" "}
+                      {features!.elevator_avg_missed_years.toFixed(1)} missed inspection year{features!.elevator_avg_missed_years !== 1 ? "s" : ""}.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
-          )
-        })}
-      </div>
+          )}
 
-      <div style={sc.footer}>
-        <div style={sc.footerGrid}>
-          <div style={sc.footerItem}>
-            <div style={sc.footerItemTitle}>Data Sources</div>
-            <div style={sc.footerItemBody}>NYC HPD Open Data · NYC DOB BIS · NYC ECB Violations · NYC Open Data Portal</div>
-          </div>
-          <div style={sc.footerItem}>
-            <div style={sc.footerItemTitle}>Scoring Method</div>
-            <div style={sc.footerItemBody}>Each factor is percentile-ranked across the full index, then linearly combined using the weights above. Final scores range 0–100.</div>
-          </div>
-          <div style={sc.footerItem}>
-            <div style={sc.footerItemTitle}>Last Updated</div>
-            <div style={sc.footerItemBody}>March 2026. Violation data synced monthly from NYC Open Data APIs.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const sc: Record<string, React.CSSProperties> = {
-  wrap: {
-    background: 'var(--white)', borderRadius: 'var(--radius-lg)',
-    border: '1px solid var(--navy-20)', overflow: 'hidden',
-  },
-  header: {
-    padding: '28px 28px 0',
-    marginBottom: 24,
-  },
-  title: { fontFamily: 'var(--font-serif)', fontSize: '1.1rem', fontWeight: 600, letterSpacing: '-0.01em', marginBottom: 10 },
-  intro: { fontFamily: 'inherit', fontSize: '0.88rem', lineHeight: 1.7, opacity: 0.65, maxWidth: 600 },
-  factors: { padding: '0 28px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20, marginBottom: 28 },
-  factor: {
-    padding: '18px 20px', borderRadius: 'var(--radius)',
-    border: '1px solid var(--navy-20)', background: 'rgba(17,30,48,0.015)',
-  },
-  factorTop: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  dot: { width: 8, height: 8, borderRadius: 2, flexShrink: 0 },
-  factorName: { fontFamily: 'var(--font-serif)', fontWeight: 600, fontSize: '0.9rem' },
-  weight: { fontFamily: 'var(--font-mono)', fontSize: '0.85rem', fontWeight: 500 },
-  barRow: { marginBottom: 12 },
-  barTrack: { height: 4, background: 'rgba(17,30,48,0.06)', borderRadius: 99, overflow: 'hidden' },
-  barFill: { height: '100%', borderRadius: 99 },
-  factorDesc: { fontSize: '0.78rem', lineHeight: 1.65, opacity: 0.6 },
-  driverTag: {
-    marginTop: 10, padding: '6px 10px',
-    border: '1px solid', borderRadius: 'var(--radius-sm)',
-    fontFamily: 'var(--font-mono)', fontSize: '0.65rem',
-  },
-  footer: {
-    background: 'rgba(17,30,48,0.03)', borderTop: '1px solid var(--navy-20)',
-    padding: '20px 28px',
-  },
-  footerGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20 },
-  footerItem: {},
-  footerItemTitle: {
-    fontFamily: 'var(--font-mono)', fontSize: '0.65rem', textTransform: 'uppercase',
-    letterSpacing: '0.08em', opacity: 0.4, marginBottom: 6,
-  },
-  footerItemBody: { fontSize: '0.78rem', lineHeight: 1.6, opacity: 0.6 },
-}
-
-// ─── Risk bucket badge ────────────────────────────────────────────────────────
-function RiskBadge({ bucket }: { bucket: string }) {
-  const color = RISK_COLORS[bucket as keyof typeof RISK_COLORS] ?? '#7a8fa6'
-  return (
-    <span style={{
-      fontFamily: 'var(--font-mono)', fontSize: '0.68rem',
-      textTransform: 'uppercase', letterSpacing: '0.08em',
-      color, border: `1px solid ${color}`, borderRadius: 99, padding: '3px 10px',
-    }}>
-      {bucket}
-    </span>
-  )
-}
-
-// ─── Score gauge ──────────────────────────────────────────────────────────────
-function ScoreGauge({ score, bucket }: { score: number; bucket: string }) {
-  const color = RISK_COLORS[bucket as keyof typeof RISK_COLORS] ?? '#7a8fa6'
-  const pct = score / 100
-  const r = 54
-  const circ = 2 * Math.PI * r
-  const dash = circ * 0.75
-  const offset = dash * (1 - pct)
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <svg width={140} height={100} viewBox="0 0 140 100">
-        <circle cx={70} cy={78} r={r} fill="none" stroke="rgba(17,30,48,0.08)"
-          strokeWidth={10} strokeDasharray={`${dash} ${circ}`}
-          strokeDashoffset={0} strokeLinecap="round"
-          transform="rotate(-225 70 78)" />
-        <circle cx={70} cy={78} r={r} fill="none" stroke={color}
-          strokeWidth={10} strokeDasharray={`${dash} ${circ}`}
-          strokeDashoffset={offset} strokeLinecap="round"
-          transform="rotate(-225 70 78)"
-          style={{ transition: 'stroke-dashoffset 0.8s ease' }} />
-        <text x={70} y={72} textAnchor="middle" dominantBaseline="middle"
-          style={{ fontFamily: 'var(--font-mono)', fontSize: '1.8rem', fontWeight: 500, fill: color }}>
-          {Math.round(score)}
-        </text>
-        <text x={70} y={90} textAnchor="middle"
-          style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', fill: '#111e30', opacity: 0.4 }}>
-          out of 100
-        </text>
-      </svg>
-    </div>
-  )
-}
-
-// ─── Top buildings table ──────────────────────────────────────────────────────
-function TopTable({ buildings, currentId }: { buildings: Building[]; currentId: string }) {
-  return (
-    <div style={tbl.wrap}>
-      <h3 style={tbl.title}>Highest-risk buildings in the index</h3>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={tbl.table}>
-          <thead>
-            <tr>
-              <th style={tbl.th}>#</th>
-              <th style={tbl.th}>Address</th>
-              <th style={tbl.th}>Borough</th>
-              <th style={tbl.th}>Mgmt</th>
-              <th style={{ ...tbl.th, textAlign: 'right' }}>Score</th>
-              <th style={{ ...tbl.th, textAlign: 'right' }}>Risk</th>
-            </tr>
-          </thead>
-          <tbody>
-            {buildings.map((b, i) => (
-              <tr key={b.id} style={{
-                ...tbl.tr,
-                background: b.id === currentId ? 'rgba(196,83,58,0.06)' : undefined,
-                outline: b.id === currentId ? '1.5px solid rgba(196,83,58,0.25)' : undefined,
-              }}>
-                <td style={{ ...tbl.td, ...tbl.rank }}>{i + 1}</td>
-                <td style={tbl.td}>
-                  <span style={tbl.addr}>{b.address}</span>
-                  {b.id === currentId && <span style={tbl.you}>← you</span>}
-                </td>
-                <td style={tbl.td}>{b.borough_name}</td>
-                <td style={{ ...tbl.td, ...tbl.mono }}>{b.management_program ?? '—'}</td>
-                <td style={{ ...tbl.td, ...tbl.mono, textAlign: 'right', fontWeight: 500 }}>
-                  {Math.round(b.risk_score)}
-                </td>
-                <td style={{ ...tbl.td, textAlign: 'right' }}>
-                  <RiskBadge bucket={b.risk_bucket} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
-const tbl: Record<string, React.CSSProperties> = {
-  wrap: { background: 'var(--white)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--navy-20)', overflow: 'hidden' },
-  title: { fontFamily: 'var(--font-serif)', fontSize: '1rem', fontWeight: 600, padding: '22px 24px 18px', borderBottom: '1px solid var(--navy-20)' },
-  table: { width: '100%', borderCollapse: 'collapse' },
-  th: {
-    fontFamily: 'var(--font-mono)', fontSize: '0.65rem', textTransform: 'uppercase',
-    letterSpacing: '0.08em', opacity: 0.4, padding: '10px 16px',
-    textAlign: 'left', borderBottom: '1px solid var(--navy-20)',
-  },
-  tr: { borderBottom: '1px solid rgba(17,30,48,0.06)' },
-  td: { padding: '12px 16px', fontSize: '0.88rem', verticalAlign: 'middle' },
-  rank: { fontFamily: 'var(--font-mono)', fontSize: '0.75rem', opacity: 0.35, width: 32 },
-  addr: { fontWeight: 500 },
-  you: { marginLeft: 8, fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--red)', opacity: 0.8 },
-  mono: { fontFamily: 'var(--font-mono)', fontSize: '0.8rem' },
-}
-
-// ─── Distribution bar ─────────────────────────────────────────────────────────
-function DistributionBar({ by_bucket, total }: { by_bucket: Record<string, number>; total: number }) {
-  return (
-    <div style={dist.wrap}>
-      <div style={dist.barWrap}>
-        {RISK_ORDER.map(b => {
-          const count = by_bucket[b] ?? 0
-          const pct = (count / total) * 100
-          return (
-            <div key={b} style={{ ...dist.seg, width: `${pct}%`, background: RISK_COLORS[b] }}
-              title={`${b}: ${count} (${pct.toFixed(1)}%)`} />
-          )
-        })}
-      </div>
-      <div style={dist.labels}>
-        {RISK_ORDER.map(b => (
-          <div key={b} style={dist.label}>
-            <span style={{ ...dist.dot, background: RISK_COLORS[b] }} />
-            <span style={dist.bucketName}>{b}</span>
-            <span style={dist.count}>{by_bucket[b] ?? 0}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-const dist: Record<string, React.CSSProperties> = {
-  wrap: { background: 'var(--white)', borderRadius: 'var(--radius-lg)', padding: 24, border: '1px solid var(--navy-20)' },
-  barWrap: { display: 'flex', height: 10, borderRadius: 99, overflow: 'hidden', marginBottom: 20 },
-  seg: { height: '100%', transition: 'width 0.6s ease' },
-  labels: { display: 'flex', gap: 20, flexWrap: 'wrap' },
-  label: { display: 'flex', alignItems: 'center', gap: 6 },
-  dot: { width: 8, height: 8, borderRadius: 2, display: 'inline-block', flexShrink: 0 },
-  bucketName: { fontFamily: 'var(--font-mono)', fontSize: '0.72rem', opacity: 0.6 },
-  count: { fontFamily: 'var(--font-mono)', fontSize: '0.72rem', fontWeight: 500, marginLeft: 2 },
-}
-
-// ─── Main report ──────────────────────────────────────────────────────────────
-export default function ReportPage({ building, email, onReset, onGoRisk: _onGoRisk }: Props) {
-  const { data, loading } = useRiskData()
-  const color = RISK_COLORS[building.risk_bucket] ?? '#7a8fa6'
-
-  if (loading || !data) {
-    return (
-      <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--cream)' }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', opacity: 0.4 }}>Loading report…</div>
-      </div>
-    )
-  }
-
-  // Filter mgmt to PVT + NYCHA only
-  const ownershipRows = data.by_mgmt.filter(r => r.label === 'PVT' || r.label === 'NYCHA')
-
-  return (
-    <div style={page.root}>
-      {/* Nav */}
-      <header style={page.header}>
-        <span style={page.logo}>Half/Ave</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <span style={page.emailTag}>{email}</span>
-          <button style={page.reset} onClick={onReset}>New lookup</button>
-        </div>
-      </header>
-
-      <main style={page.main}>
-
-        {/* ── VIOLATIONS (top of report) ─────────────────────────── */}
-        <section style={{ ...page.section, marginTop: 40 }}>
-          <div style={page.sectionHeader}>
-            <h2 style={page.sectionTitle}>Violation history</h2>
-            <span style={page.sectionSub}>{building.address}</span>
-          </div>
-          <ViolationTabs buildingId={building.id} />
-        </section>
-
-        {/* ── HERO CARD ──────────────────────────────────────────── */}
-        <section style={{ marginTop: 40 }}>
-          <div style={{ ...page.hero, background: 'var(--navy)', color: 'var(--cream)' }}>
-            <div style={page.heroLeft}>
-              <RiskBadge bucket={building.risk_bucket} />
-              <h1 style={page.heroAddress}>{building.address}</h1>
-              <p style={page.heroMeta}>
-                {building.borough_name}
-                {building.stories ? ` · ${building.stories} stories` : ''}
-                {building.management_program ? ` · ${building.management_program}` : ''}
-              </p>
-              <div style={page.heroStats}>
-                <div>
-                  <div style={{ ...page.heroStatN, color }}>{Math.round(building.percentile)}th</div>
-                  <div style={page.heroStatLabel}>Percentile</div>
-                </div>
-                <div style={page.divider} />
-                <div>
-                  <div style={page.heroStatN}>{data.total}</div>
-                  <div style={page.heroStatLabel}>Buildings in index</div>
+          {/* ── RISK DRIVERS ── */}
+          {drivers.length > 0 && (
+            <div className="rp-section">
+              <div className="rp-section-title">Top Risk Drivers</div>
+              <div className="rp-card">
+                <div className="rp-drivers">
+                  {drivers.map((d, i) => {
+                    const meta = driverMeta(d);
+                    return (
+                      <div className="rp-driver" key={i}>
+                        <span className="rp-driver-idx">{i + 1}</span>
+                        <div
+                          className="rp-driver-icon"
+                          style={{ background: meta.bg }}
+                        >
+                          {meta.icon}
+                        </div>
+                        <span className="rp-driver-text">{d}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
-            <div style={page.heroRight}>
-              <ScoreGauge score={building.risk_score} bucket={building.risk_bucket} />
-              <p style={page.heroRiskLabel}>Risk Score</p>
+          )}
+
+          {/* ── BUILDING METRICS ── */}
+          {features && (
+            <div className="rp-section">
+              <div className="rp-section-title">Building Metrics</div>
+              <div className="rp-stats-grid">
+                <div className="rp-stat">
+                  <div className={`rp-stat-val ${features.open_violations > 20 ? "rp-stat-warn" : features.open_violations > 10 ? "rp-stat-caution" : "rp-stat-ok"}`}>
+                    {fmt(features.open_violations)}
+                  </div>
+                  <div className="rp-stat-lbl">Open violations</div>
+                </div>
+                <div className="rp-stat">
+                  <div className={`rp-stat-val ${features.recent_12m_violations > 30 ? "rp-stat-warn" : features.recent_12m_violations > 15 ? "rp-stat-caution" : ""}`}>
+                    {fmt(features.recent_12m_violations)}
+                  </div>
+                  <div className="rp-stat-lbl">New last 12 months</div>
+                </div>
+                <div className="rp-stat">
+                  <div className={`rp-stat-val ${features.avg_open_age_days > 500 ? "rp-stat-warn" : features.avg_open_age_days > 200 ? "rp-stat-caution" : ""}`}>
+                    {Math.round(features.avg_open_age_days)}d
+                  </div>
+                  <div className="rp-stat-lbl">Avg days open</div>
+                </div>
+                <div className="rp-stat">
+                  <div className={`rp-stat-val ${features.violation_density > 1 ? "rp-stat-warn" : features.violation_density > 0.5 ? "rp-stat-caution" : "rp-stat-ok"}`}>
+                    {features.violation_density.toFixed(2)}
+                  </div>
+                  <div className="rp-stat-lbl">Violations per unit</div>
+                </div>
+                <div className="rp-stat">
+                  <div className={`rp-stat-val ${features.resolution_rate < 0.5 ? "rp-stat-warn" : features.resolution_rate < 0.7 ? "rp-stat-caution" : "rp-stat-ok"}`}>
+                    {Math.round(features.resolution_rate * 100)}%
+                  </div>
+                  <div className="rp-stat-lbl">Resolution rate</div>
+                </div>
+                <div className="rp-stat">
+                  <div className={`rp-stat-val ${features.avg_resolution_days > 365 ? "rp-stat-warn" : features.avg_resolution_days > 180 ? "rp-stat-caution" : ""}`}>
+                    {Math.round(features.avg_resolution_days)}d
+                  </div>
+                  <div className="rp-stat-lbl">Avg days to resolve</div>
+                </div>
+                <div className="rp-stat">
+                  <div className={`rp-stat-val ${features.severity_points > 200 ? "rp-stat-warn" : features.severity_points > 100 ? "rp-stat-caution" : ""}`}>
+                    {fmt(features.severity_points)}
+                  </div>
+                  <div className="rp-stat-lbl">Severity score</div>
+                </div>
+                {totalBalance > 0 && (
+                  <div className="rp-stat">
+                    <div className="rp-stat-val rp-stat-warn">{fmtCurrency(totalBalance)}</div>
+                    <div className="rp-stat-lbl">Balance due</div>
+                  </div>
+                )}
+              </div>
             </div>
+          )}
+
+          {/* ── PEER COMPARISON ── */}
+          {peerRows.length > 0 && (
+            <div className="rp-section">
+              <div className="rp-section-title">Peer Comparison vs NYC Average</div>
+              <div className="rp-card">
+                {peerRows.map((row) => (
+                  <PeerBar key={row.label} {...row} />
+                ))}
+              </div>
+              <div style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--slate)" }}>
+                Gray marker = NYC building average. Bar = this building.
+              </div>
+            </div>
+          )}
+
+          {/* ── VIOLATIONS ── */}
+          {violations.length > 0 && (
+            <div className="rp-section">
+              <div className="rp-section-title">
+                All Violations
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                  {violations.length} total · click row to expand
+                </span>
+              </div>
+              <ViolationTabs violations={violations} />
+            </div>
+          )}
+
+          {/* ── FOOTER ── */}
+          <div style={{
+            marginTop: 48,
+            paddingTop: 24,
+            borderTop: "1px solid var(--navy-10)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            color: "var(--slate)",
+            lineHeight: 1.6,
+          }}>
+            <div style={{ marginBottom: 4 }}>
+              Data sourced from NYC HPD, DOB, and ECB open data. Report generated by{" "}
+              <a href="https://halfave.co" style={{ color: "var(--navy)", textDecoration: "underline" }}>Half Ave</a>.
+            </div>
+            {building.bbl && <div>BBL: {building.bbl} · BIN: {building.bin}</div>}
+            {building.management_program && (
+              <div>Management Program: {building.management_program}</div>
+            )}
           </div>
-        </section>
-
-        {/* ── NYC DISTRIBUTION ──────────────────────────────────── */}
-        <section style={page.section}>
-          <div style={page.sectionHeader}>
-            <h2 style={page.sectionTitle}>NYC-wide risk distribution</h2>
-            <span style={page.sectionSub}>978 buildings</span>
-          </div>
-          <DistributionBar by_bucket={data.by_bucket} total={data.total} />
-        </section>
-
-        {/* ── BOROUGH MAP ───────────────────────────────────────── */}
-        <section style={page.section}>
-          <div style={page.sectionHeader}>
-            <h2 style={page.sectionTitle}>Risk by borough</h2>
-            <span style={page.sectionSub}>Average risk score</span>
-          </div>
-          <NYCBoroughMap rows={data.by_borough} />
-        </section>
-
-        {/* ── OWNERSHIP COMPARISON ──────────────────────────────── */}
-        <section style={page.section}>
-          <div style={page.sectionHeader}>
-            <h2 style={page.sectionTitle}>Risk by ownership type</h2>
-          </div>
-          <OwnershipCard rows={ownershipRows} />
-        </section>
-
-        {/* ── TOP BUILDINGS ─────────────────────────────────────── */}
-        <section style={page.section}>
-          <div style={page.sectionHeader}>
-            <h2 style={page.sectionTitle}>Highest-risk buildings</h2>
-            <span style={page.sectionSub}>Top 20 by risk score</span>
-          </div>
-          <TopTable buildings={data.top_buildings} currentId={building.id} />
-        </section>
-
-        {/* ── SCORING EXPLAINER ─────────────────────────────────── */}
-        <section style={page.section}>
-          <div style={page.sectionHeader}>
-            <h2 style={page.sectionTitle}>Risk scoring methodology</h2>
-          </div>
-          <ScoringExplainer building={building} />
-        </section>
-
-        <footer style={page.footer}>
-          <p>Risk scores derived from HPD, DOB, and ECB violation data via NYC Open Data.</p>
-          <p>Updated March 2026 · <a href="https://halfave.co" style={{ opacity: 0.6 }}>halfave.co</a></p>
-        </footer>
-      </main>
-    </div>
-  )
-}
-
-const page: Record<string, React.CSSProperties> = {
-  root: { minHeight: '100dvh', background: 'var(--cream)' },
-  header: {
-    position: 'sticky', top: 0, zIndex: 10,
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '16px 40px', background: 'rgba(247,244,239,0.92)',
-    backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--navy-20)',
-  },
-  logo: { fontFamily: 'var(--font-serif)', fontWeight: 600, fontSize: '1rem' },
-  emailTag: { fontFamily: 'var(--font-mono)', fontSize: '0.72rem', opacity: 0.4, letterSpacing: '0.02em' },
-  reset: {
-    fontFamily: 'var(--font-mono)', fontSize: '0.72rem',
-    padding: '6px 14px', border: '1px solid var(--navy-20)',
-    borderRadius: 99, cursor: 'pointer', background: 'none', color: 'var(--navy)',
-  },
-  main: { maxWidth: 900, margin: '0 auto', padding: '0 24px 80px' },
-  hero: {
-    borderRadius: 'var(--radius-lg)', padding: '36px 40px',
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    gap: 32, flexWrap: 'wrap',
-  },
-  heroLeft: { flex: 1, display: 'flex', flexDirection: 'column', gap: 12 },
-  heroAddress: {
-    fontFamily: 'var(--font-serif)', fontSize: 'clamp(1.4rem, 4vw, 2rem)',
-    fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.2,
-  },
-  heroMeta: { fontFamily: 'var(--font-mono)', fontSize: '0.72rem', opacity: 0.4, textTransform: 'uppercase', letterSpacing: '0.08em' },
-  heroStats: { display: 'flex', gap: 24, alignItems: 'center', marginTop: 8 },
-  heroStatN: { fontFamily: 'var(--font-mono)', fontSize: '1.4rem', fontWeight: 500, lineHeight: 1 },
-  heroStatLabel: { fontFamily: 'var(--font-mono)', fontSize: '0.65rem', opacity: 0.4, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4 },
-  divider: { width: 1, height: 36, background: 'rgba(247,244,239,0.15)' },
-  heroRight: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 },
-  heroRiskLabel: { fontFamily: 'var(--font-mono)', fontSize: '0.65rem', opacity: 0.35, textTransform: 'uppercase', letterSpacing: '0.1em' },
-  section: { marginTop: 40 },
-  sectionHeader: { display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 16 },
-  sectionTitle: { fontFamily: 'var(--font-serif)', fontSize: '1.2rem', fontWeight: 600, letterSpacing: '-0.01em' },
-  sectionSub: { fontFamily: 'var(--font-mono)', fontSize: '0.7rem', opacity: 0.4 },
-  footer: {
-    marginTop: 60, paddingTop: 32, borderTop: '1px solid var(--navy-20)',
-    fontFamily: 'var(--font-mono)', fontSize: '0.7rem', opacity: 0.4,
-    lineHeight: 2, textAlign: 'center',
-  },
+        </div>
+      </div>
+    </>
+  );
 }
