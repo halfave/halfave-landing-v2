@@ -13,7 +13,6 @@ const BUCKET_BG: Record<string, string> = {
 
 interface BucketStat { risk_bucket: string; count: number; avg_score: number; min_score: number; max_score: number; }
 interface BoroughStat { borough: number; count: number; avg_score: number; high_risk_count: number; }
-interface TopBuilding { address: string; borough: number; risk_score: number; risk_bucket: string; open_violations: number; }
 
 const BUCKET_ORDER = ['Critical', 'High Risk', 'Elevated', 'Watch', 'Healthy'];
 
@@ -25,20 +24,16 @@ interface Props { onBack?: () => void }
 export default function RiskIndexPage({ onBack }: Props) {
   const [buckets, setBuckets] = useState<BucketStat[]>([]);
   const [boroughs, setBoroughs] = useState<BoroughStat[]>([]);
-  const [topBuildings, setTopBuildings] = useState<TopBuilding[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
 
   useEffect(() => {
     async function load() {
       try {
-        const [scoresRes, buildingsRes, topRes] = await Promise.all([
+        const [scoresRes, buildingsRes] = await Promise.all([
           db.from('building_risk_scores').select('risk_bucket, risk_score'),
           db.from('buildings').select('borough, building_risk_scores!inner(risk_score, risk_bucket)'),
-          db.from('building_risk_scores')
-            .select('risk_score, risk_bucket, buildings!inner(address, borough), building_features!inner(open_violations)')
-            .order('risk_score', { ascending: false })
-            .limit(20),
+
         ]);
 
         if (scoresRes.data) {
@@ -78,16 +73,6 @@ export default function RiskIndexPage({ onBack }: Props) {
           })).sort((a, b) => b.avg_score - a.avg_score));
         }
 
-        if (topRes.data) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          setTopBuildings((topRes.data as any[]).map((r: any) => ({
-            address: r.buildings?.address || '—',
-            borough: r.buildings?.borough,
-            risk_score: r.risk_score,
-            risk_bucket: r.risk_bucket,
-            open_violations: r.building_features?.open_violations || 0,
-          })));
-        }
       } catch (err) {
         console.error('RiskIndexPage load error:', err);
       }
@@ -173,7 +158,10 @@ export default function RiskIndexPage({ onBack }: Props) {
             </section>
 
             <section style={{ background: '#fff', borderRadius: 20, padding: '2rem', marginBottom: '1.5rem', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-              <div style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9ca3af', marginBottom: '1.25rem' }}>By Borough — Average Risk Score</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                <div style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9ca3af' }}>By Borough — Average Risk Score</div>
+                <div style={{ fontSize: '0.68rem', color: '#c9c4be' }}>{total.toLocaleString()} buildings total</div>
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {boroughs.map(b => {
                   const barPct = (b.avg_score / maxBoroughScore) * 100;
@@ -196,25 +184,7 @@ export default function RiskIndexPage({ onBack }: Props) {
               </div>
             </section>
 
-            <section style={{ background: '#fff', borderRadius: 20, padding: '2rem', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-              <div style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9ca3af', marginBottom: '1.25rem' }}>Highest Risk Buildings</div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {topBuildings.map((bldg, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.9rem 0', borderBottom: i < topBuildings.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 8, background: BUCKET_BG[bldg.risk_bucket] ?? '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Georgia, serif', fontWeight: 700, fontSize: '0.85rem', color: BUCKET_COLORS[bldg.risk_bucket] ?? '#374151', flexShrink: 0 }}>
-                      {bldg.risk_score}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: '0.875rem', color: '#111e30', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{bldg.address}</div>
-                      <div style={{ fontSize: '0.72rem', color: '#9ca3af' }}>{BOROUGH_NAMES[bldg.borough]} · {bldg.open_violations} open violations</div>
-                    </div>
-                    <span style={{ padding: '2px 8px', borderRadius: 50, fontSize: '0.68rem', fontWeight: 700, background: BUCKET_BG[bldg.risk_bucket] ?? '#f3f4f6', color: BUCKET_COLORS[bldg.risk_bucket] ?? '#374151', flexShrink: 0 }}>
-                      {bldg.risk_bucket}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
+
 
             <p style={{ textAlign: 'center', fontSize: '0.75rem', color: '#9ca3af', marginTop: '2rem' }}>
               Risk scores calculated from open HPD violations, DOB/ECB penalties, severity weighting, and recency signals. Index covers {total} NYC multifamily buildings.
