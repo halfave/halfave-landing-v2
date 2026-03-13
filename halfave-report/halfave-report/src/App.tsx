@@ -10,6 +10,9 @@ type Step = 'main' | 'email' | 'report' | 'risk'
 export default function App() {
   const [step, setStep] = useState<Step>(() => {
     if (window.location.pathname === '/risk' || window.location.hash === '#risk') return 'risk'
+    // Deep-link from email: /report?bin=XXXXXXX skips the gate
+    const params = new URLSearchParams(window.location.search)
+    if ((window.location.pathname === '/report' || params.has('bin')) && params.get('bin')) return 'report'
     return 'main'
   })
   const [building, setBuilding] = useState<Building | null>(null)
