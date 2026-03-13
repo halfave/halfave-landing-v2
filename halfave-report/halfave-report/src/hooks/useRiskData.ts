@@ -20,7 +20,7 @@ function buildPivot(rows: Building[], keyFn: (b: Building) => string): PivotRow[
     }
     map[key][b.risk_bucket as RiskBucket]++
     map[key].total++
-    map[key].avg_score += b.risk_score
+    map[key].avg_score += (b.risk_score ?? 0)
   }
   return Object.values(map).map(r => ({ ...r, avg_score: Math.round((r.avg_score / r.total) * 10) / 10 }))
 }
@@ -73,10 +73,10 @@ export function useRiskData() {
         const BOROUGH_ORDER = ['Manhattan', 'Bronx', 'Brooklyn', 'Queens', 'Staten Island']
         const STORY_ORDER = ['1–3', '4–6', '7–12', '13+', 'Unknown']
 
-        const by_borough = buildPivot(buildings, b => b.borough_name)
+        const by_borough = buildPivot(buildings, b => b.borough_name ?? 'Unknown')
           .sort((a, b) => BOROUGH_ORDER.indexOf(a.label) - BOROUGH_ORDER.indexOf(b.label))
 
-        const by_story_band = buildPivot(buildings, b => b.story_band)
+        const by_story_band = buildPivot(buildings, b => b.story_band ?? 'Unknown')
           .sort((a, b) => STORY_ORDER.indexOf(a.label) - STORY_ORDER.indexOf(b.label))
 
         const by_mgmt = buildPivot(buildings, b => b.management_program ?? 'Unknown')
