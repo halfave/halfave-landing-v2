@@ -1120,7 +1120,7 @@ interface ReportPageProps {
   onGoRisk?: () => void;
 }
 
-export default function ReportPage(_props: ReportPageProps) {
+export default function ReportPage({ building: propBuilding }: ReportPageProps) {
 
 
   const [building, setBuilding] = useState<Building | null>(null);
@@ -1135,23 +1135,38 @@ export default function ReportPage(_props: ReportPageProps) {
     setLoading(true);
     setError(null);
     try {
-      // Get BIN from URL params or window global
-      const params = new URLSearchParams(window.location.search);
-      const bin = params.get("bin") || (window as any).__halfaveBldg?.bin;
-      if (!bin) throw new Error("No building BIN specified.");
+      // Use prop building if available, otherwise fall back to BIN lookup
+      let bldg: Building | null = propBuilding ?? null;
 
-      // Fetch building
-      const { data: bldgs, error: bErr } = await supabase
-        .from("buildings")
-        .select("*")
-        .eq("bin", bin)
-        .limit(1);
-      if (bErr) throw bErr;
-      if (!bldgs?.length) throw new Error(`No building found for BIN ${bin}`);
-      const bldg = bldgs[0];
+      if (!bldg) {
+        const params = new URLSearchParams(window.location.search);
+        const bin = params.get("bin") || (window as any).__halfaveBldg?.bin;
+        if (!bin) throw new Error("No building BIN specified.");
+        const { data: bldgs, error: bErr } = await supabase
+          .from("buildings")
+          .select("*")
+          .eq("bin", bin)
+          .limit(1);
+        if (bErr) throw bErr;
+        if (!bldgs?.length) throw new Error(`No building found for BIN ${bin}`);
+        bldg = bldgs[0];
+      }
+
       setBuilding(bldg);
 
-      const buildingId = bldg.id;
+      // If id looks like "bin-XXXXXX" (from MainSitePage), look up the real UUID
+      let buildingId = bldg.id;
+      if (buildingId.startsWith("bin-") && bldg.bin) {
+        const { data: bldgs2 } = await supabase
+          .from("buildings")
+          .select("id")
+          .eq("bin", bldg.bin)
+          .limit(1);
+        if (bldgs2?.length) {
+          buildingId = bldgs2[0].id;
+          setBuilding({ ...bldg, id: buildingId });
+        }
+      }
 
       // Parallel: risk score + features + violations
       const [rsRes, ftRes, vRes] = await Promise.all([
