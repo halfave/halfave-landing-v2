@@ -40,12 +40,6 @@ function riskBg(percentile: number) {
   if (percentile >= 50) return "var(--risk-amber-bg)";
   return "var(--risk-green-bg)";
 }
-
-function fmt(n?: number | null, fallback = "–") {
-  if (n == null) return fallback;
-  return n.toLocaleString();
-}
-
 function fmtCurrency(n?: number | null) {
   if (!n) return "–";
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
