@@ -1412,7 +1412,7 @@ export default function ReportPage(_props: ReportPageProps) {
 
           setInsights({
             inspection_days_12m,
-            inspection_days_peer_avg: null, // no peer data client-side
+            inspection_days_peer_avg: null,
             unit_band,
             violations_by_year,
             violations_5yr_total,
@@ -1421,6 +1421,25 @@ export default function ReportPage(_props: ReportPageProps) {
             multi_agency_count,
             long_open_count,
           });
+
+          // Fetch peer average from Supabase by BIN
+          try {
+            const bin = ww?.bin ? String(ww.bin) : null;
+            if (bin) {
+              const { data: peerData } = await (supabase as any)
+                .from("buildings")
+                .select("building_insights(inspection_days_peer_avg)")
+                .eq("bin", bin)
+                .single();
+              const peerRow = peerData?.building_insights;
+              const peerAvg = Array.isArray(peerRow)
+                ? peerRow[0]?.inspection_days_peer_avg
+                : peerRow?.inspection_days_peer_avg;
+              if (peerAvg != null) {
+                setInsights(prev => prev ? { ...prev, inspection_days_peer_avg: Number(peerAvg) } : prev);
+              }
+            }
+          } catch (_) { /* peer avg optional */ }
         }
       } catch (_) { /* insights optional */ }
     } catch (e: any) {
@@ -1673,13 +1692,46 @@ export default function ReportPage(_props: ReportPageProps) {
                     </span>
                     <span style={{ fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-sans)" }}>visits / 12 mo</span>
                   </div>
+                  {/* Comparison bars */}
+                  {(() => {
+                    const mine = insights.inspection_days_12m ?? 0;
+                    const avg = insights.inspection_days_peer_avg;
+                    const maxBar = Math.max(mine, avg ?? 0, 1) * 1.2;
+                    const myPct = Math.min((mine / maxBar) * 100, 100);
+                    const avgPct = avg != null ? Math.min((avg / maxBar) * 100, 100) : null;
+                    const barColor = mine > 6 ? "var(--risk-red)" : mine > 3 ? "var(--risk-amber)" : "var(--risk-green)";
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--slate)", width: 58, flexShrink: 0 }}>This bldg</span>
+                          <div style={{ flex: 1, height: 7, background: "rgba(17,30,48,0.07)", borderRadius: 4, overflow: "hidden" }}>
+                            <div style={{ width: `${myPct}%`, height: "100%", background: barColor, borderRadius: 4 }} />
+                          </div>
+                          <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--navy)", width: 22, textAlign: "right" }}>{mine}</span>
+                        </div>
+                        {avg != null && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--slate)", width: 58, flexShrink: 0 }}>Peer avg</span>
+                            <div style={{ flex: 1, height: 7, background: "rgba(17,30,48,0.07)", borderRadius: 4, overflow: "hidden" }}>
+                              <div style={{ width: `${avgPct}%`, height: "100%", background: "var(--slate)", borderRadius: 4, opacity: 0.45 }} />
+                            </div>
+                            <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--slate)", width: 22, textAlign: "right" }}>{avg.toFixed(1)}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "var(--font-sans)", lineHeight: 1.55, flexGrow: 1 }}>
                     {(() => {
                       const mine = insights.inspection_days_12m ?? 0;
+                      const avg = insights.inspection_days_peer_avg;
+                      const band = insights.unit_band ?? "";
                       if (mine === 0) return "No inspections recorded in the last 12 months.";
-                      if (mine > 6) return <>Inspectors visited <strong>{mine}×</strong> — high frequency suggests ongoing unresolved issues attracting repeat enforcement.</>;
-                      if (mine > 3) return <>Inspectors visited <strong>{mine}×</strong> — above average activity for this building type.</>;
-                      return <>Inspectors visited <strong>{mine}×</strong> — normal activity level for the past year.</>;
+                      if (avg != null && mine > avg * 1.5) return <>Significantly above the <strong>{avg.toFixed(1)}×</strong> peer avg for {band}-unit buildings — suggests ongoing unresolved issues.</>;
+                      if (avg != null && mine > avg) return <>Above the <strong>{avg.toFixed(1)}×</strong> peer avg for {band}-unit buildings in this borough.</>;
+                      if (avg != null) return <>In line with the <strong>{avg.toFixed(1)}×</strong> peer avg for {band}-unit buildings.</>;
+                      if (mine > 6) return <>High frequency — suggests ongoing unresolved issues attracting repeat enforcement.</>;
+                      return <>Normal activity level for the past year.</>;
                     })()}
                   </div>
                 </div>
@@ -1760,17 +1812,17 @@ export default function ReportPage(_props: ReportPageProps) {
                         <div style={{ fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-sans)", lineHeight: 1.5 }}>No multi-agency enforcement patterns detected.</div>
                       </div>
                     )}
-                    {(insights.inspection_days_12m ?? 0) > 6 ? (
+                    {(insights.inspection_days_12m ?? 0) > 3 ? (
                       <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                         <span style={{ fontSize: 14, lineHeight: 1.2, flexShrink: 0 }}>🔍</span>
                         <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "var(--font-sans)", lineHeight: 1.5 }}>
-                          <strong style={{ color: "var(--risk-red)" }}>{insights.inspection_days_12m}×</strong> inspections in 12 months — high frequency often signals unresolved repeat violations.
+                          <strong style={{ color: (insights.inspection_days_12m ?? 0) > 6 ? "var(--risk-red)" : "var(--risk-amber)" }}>{insights.inspection_days_12m}×</strong> inspection visits — {(insights.inspection_days_12m ?? 0) > 6 ? "high frequency often signals unresolved repeat violations." : "above average for this building type."}
                         </div>
                       </div>
                     ) : (
                       <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                         <span style={{ fontSize: 14, lineHeight: 1.2 }}>✅</span>
-                        <div style={{ fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-sans)", lineHeight: 1.5 }}>Inspection frequency is within normal range.</div>
+                        <div style={{ fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-sans)", lineHeight: 1.5 }}>Inspection frequency is normal for this building type.</div>
                       </div>
                     )}
                   </div>
