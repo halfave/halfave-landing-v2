@@ -683,6 +683,7 @@ const CSS = `
     .rp-vsummary { grid-template-columns: repeat(2, 1fr); }
     .rp-expand-inner { grid-template-columns: 1fr; }
     .rp-stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .rp-insights-grid { grid-template-columns: 1fr !important; }
   }
 `;
 
@@ -1654,115 +1655,127 @@ export default function ReportPage(_props: ReportPageProps) {
             <OpenViolationTabs violations={violations} elevators={[]} boilers={[]} co={null} />
           </div>
 
-          {/* ── INSPECTION FREQUENCY ── */}
+          {/* ── INSIGHTS ── */}
           {insights && (
             <div className="rp-section">
-              <div className="rp-section-title">Inspection Frequency</div>
-              <div className="rp-card" style={{ padding: "20px 24px" }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 8 }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 40, fontWeight: 700,
-                    color: (insights.inspection_days_12m ?? 0) > (insights.inspection_days_peer_avg ?? 0) * 1.5
-                      ? "var(--risk-red)" : (insights.inspection_days_12m ?? 0) > (insights.inspection_days_peer_avg ?? 0)
-                      ? "var(--risk-amber)" : "var(--risk-green)" }}>
-                    {insights.inspection_days_12m ?? 0}
-                  </span>
-                  <span style={{ fontSize: 14, color: "var(--slate)", fontFamily: "var(--font-sans)" }}>
-                    inspection visits in the last 12 months
-                  </span>
+              <div className="rp-section-title">Insights</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+
+                {/* Card 1: Inspection Frequency */}
+                <div className="rp-card" style={{ padding: "20px 20px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)" }}>Inspection Frequency</div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 36, fontWeight: 700, lineHeight: 1,
+                      color: (insights.inspection_days_12m ?? 0) > 6 ? "var(--risk-red)"
+                           : (insights.inspection_days_12m ?? 0) > 3 ? "var(--risk-amber)"
+                           : "var(--risk-green)" }}>
+                      {insights.inspection_days_12m ?? 0}
+                    </span>
+                    <span style={{ fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-sans)" }}>visits / 12 mo</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "var(--font-sans)", lineHeight: 1.55, flexGrow: 1 }}>
+                    {(() => {
+                      const mine = insights.inspection_days_12m ?? 0;
+                      if (mine === 0) return "No inspections recorded in the last 12 months.";
+                      if (mine > 6) return <>Inspectors visited <strong>{mine}×</strong> — high frequency suggests ongoing unresolved issues attracting repeat enforcement.</>;
+                      if (mine > 3) return <>Inspectors visited <strong>{mine}×</strong> — above average activity for this building type.</>;
+                      return <>Inspectors visited <strong>{mine}×</strong> — normal activity level for the past year.</>;
+                    })()}
+                  </div>
                 </div>
-                <div style={{ fontSize: 13, color: "var(--navy)", fontFamily: "var(--font-sans)", lineHeight: 1.6 }}>
-                  {(() => {
-                    const mine = insights.inspection_days_12m ?? 0;
-                    const avg = insights.inspection_days_peer_avg ?? 0;
-                    const peerLabel = `similar ${insights.unit_band ?? ""}-unit buildings in this borough`;
-                    if (mine === 0) return `No inspections recorded in the last 12 months.`;
-                    if (avg > 0 && mine > avg * 1.5) return <>Inspectors visited <strong>{mine}×</strong> — significantly more often than the peer average of <strong>{avg.toFixed(1)}×</strong> for {peerLabel}. High frequency suggests ongoing unresolved issues.</>;
-                    if (avg > 0 && mine > avg) return <>Inspectors visited <strong>{mine}×</strong> — above the peer average of <strong>{avg.toFixed(1)}×</strong> for {peerLabel}.</>;
-                    if (avg > 0) return <>Inspectors visited <strong>{mine}×</strong> — in line with the peer average of <strong>{avg.toFixed(1)}×</strong> for {peerLabel}.</>;
-                    return <>Inspectors visited <strong>{mine}×</strong> in the last 12 months.</>;
+
+                {/* Card 2: Violation Momentum */}
+                <div className="rp-card" style={{ padding: "20px 20px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)" }}>Violation Momentum</div>
+                  {/* Big number + trend */}
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 36, fontWeight: 700, lineHeight: 1,
+                      color: insights.violations_5yr_trend === "increasing" ? "var(--risk-red)" : insights.violations_5yr_trend === "decreasing" ? "var(--risk-green)" : "var(--slate)" }}>
+                      {insights.violations_5yr_total ?? 0}
+                    </span>
+                    <span style={{ fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-sans)" }}>violations / 5 yr</span>
+                    {insights.violations_5yr_trend && (
+                      <span style={{ marginLeft: "auto", fontSize: 13, fontFamily: "var(--font-mono)",
+                        color: insights.violations_5yr_trend === "increasing" ? "var(--risk-red)" : insights.violations_5yr_trend === "decreasing" ? "var(--risk-green)" : "var(--slate)" }}>
+                        {insights.violations_5yr_trend === "increasing" ? "↑ increasing" : insights.violations_5yr_trend === "decreasing" ? "↓ decreasing" : "→ stable"}
+                      </span>
+                    )}
+                  </div>
+                  {/* Sparkline */}
+                  {insights.violations_by_year && (() => {
+                    const byYear = insights.violations_by_year!;
+                    const years = Object.keys(byYear).sort();
+                    const vals = years.map(y => byYear[y]);
+                    const maxVal = Math.max(...vals, 1);
+                    const W = 220, H = 72, pad = 10, top = 14, bot = 60;
+                    const xs = years.map((_, i) => pad + (i / Math.max(years.length - 1, 1)) * (W - pad * 2));
+                    const ys = vals.map(v => top + (1 - v / maxVal) * (bot - top - 2));
+                    const pts = xs.map((x, i) => `${x},${ys[i]}`).join(" ");
+                    const tc = insights.violations_5yr_trend === "increasing" ? "#c4533a" : insights.violations_5yr_trend === "decreasing" ? "#3a7d5e" : "#7a8fa6";
+                    return (
+                      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", overflow: "visible" }}>
+                        <line x1={pad} y1={bot} x2={W - pad} y2={bot} stroke="rgba(17,30,48,0.08)" strokeWidth={0.5} />
+                        <polygon points={`${xs[0]},${bot} ${pts} ${xs[xs.length-1]},${bot}`} fill={tc} opacity={0.08} />
+                        <polyline points={pts} fill="none" stroke={tc} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+                        {xs.map((x, i) => (
+                          <g key={i}>
+                            <circle cx={x} cy={ys[i]} r={3} fill={tc} />
+                            <text x={x} y={ys[i] - 5} textAnchor="middle" fontSize={9} fill="#7a8fa6" fontFamily="monospace">{vals[i]}</text>
+                            <text x={x} y={H} textAnchor="middle" fontSize={9} fill="#7a8fa6" fontFamily="monospace">'{years[i].slice(2)}</text>
+                          </g>
+                        ))}
+                      </svg>
+                    );
                   })()}
                 </div>
-              </div>
-            </div>
-          )}
 
-          {/* ── VIOLATION MOMENTUM ── */}
-          {insights?.violations_by_year && (
-            <div className="rp-section">
-              <div className="rp-section-title">Violation Momentum
-                <span style={{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0, marginLeft: 8 }}>
-                  last 5 years · {insights.violations_5yr_total ?? 0} total
-                  {insights.violations_5yr_trend && (
-                    <span style={{ marginLeft: 8, color: insights.violations_5yr_trend === "increasing" ? "var(--risk-red)" : insights.violations_5yr_trend === "decreasing" ? "var(--risk-green)" : "var(--slate)" }}>
-                      {insights.violations_5yr_trend === "increasing" ? "↑ increasing" : insights.violations_5yr_trend === "decreasing" ? "↓ decreasing" : "→ stable"}
-                    </span>
-                  )}
-                </span>
-              </div>
-              <div className="rp-card" style={{ padding: "20px 24px" }}>
-                {(() => {
-                  const byYear = insights.violations_by_year!;
-                  const years = Object.keys(byYear).sort();
-                  const maxVal = Math.max(...Object.values(byYear), 1);
-                  const currentYear = new Date().getFullYear().toString();
-                  return (
-                    <div style={{ display: "flex", gap: 8, alignItems: "flex-end", height: 80 }}>
-                      {years.map(yr => {
-                        const val = byYear[yr];
-                        const h = Math.round((val / maxVal) * 72);
-                        const isCurrent = yr === currentYear;
-                        const color = val > maxVal * 0.7 ? "var(--risk-red)" : val > maxVal * 0.4 ? "var(--risk-amber)" : "var(--risk-green)";
-                        return (
-                          <div key={yr} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                            <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--navy)", fontWeight: 600 }}>{val}</div>
-                            <div style={{ width: "100%", height: h, background: isCurrent ? "var(--slate)" : color, borderRadius: 3, opacity: isCurrent ? 0.5 : 1 }} />
-                            <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--slate)" }}>{yr.slice(2)}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-          )}
+                {/* Card 3: Hidden Risk Signals */}
+                <div className="rp-card" style={{ padding: "20px 20px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)" }}>Hidden Risk Signals</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, flexGrow: 1 }}>
+                    {(insights.oldest_open_violation_days ?? 0) > 365 ? (
+                      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                        <span style={{ fontSize: 14, lineHeight: 1.2, flexShrink: 0 }}>🕐</span>
+                        <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "var(--font-sans)", lineHeight: 1.5 }}>
+                          Oldest open violation is <strong style={{ color: "var(--risk-amber)" }}>{Math.round((insights.oldest_open_violation_days ?? 0) / 365 * 10) / 10} years</strong> old
+                          {(insights.long_open_count ?? 0) > 0 && <>; <strong>{insights.long_open_count}</strong> violations open 3+ years</>}.
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                        <span style={{ fontSize: 14, lineHeight: 1.2 }}>✅</span>
+                        <div style={{ fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-sans)", lineHeight: 1.5 }}>No violations open longer than 1 year.</div>
+                      </div>
+                    )}
+                    {(insights.multi_agency_count ?? 0) > 2 ? (
+                      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                        <span style={{ fontSize: 14, lineHeight: 1.2, flexShrink: 0 }}>🏛️</span>
+                        <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "var(--font-sans)", lineHeight: 1.5 }}>
+                          <strong style={{ color: "var(--risk-amber)" }}>{insights.multi_agency_count}</strong> months with violations from multiple agencies simultaneously — suggests systemic issues.
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                        <span style={{ fontSize: 14, lineHeight: 1.2 }}>✅</span>
+                        <div style={{ fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-sans)", lineHeight: 1.5 }}>No multi-agency enforcement patterns detected.</div>
+                      </div>
+                    )}
+                    {(insights.inspection_days_12m ?? 0) > 6 ? (
+                      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                        <span style={{ fontSize: 14, lineHeight: 1.2, flexShrink: 0 }}>🔍</span>
+                        <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "var(--font-sans)", lineHeight: 1.5 }}>
+                          <strong style={{ color: "var(--risk-red)" }}>{insights.inspection_days_12m}×</strong> inspections in 12 months — high frequency often signals unresolved repeat violations.
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                        <span style={{ fontSize: 14, lineHeight: 1.2 }}>✅</span>
+                        <div style={{ fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-sans)", lineHeight: 1.5 }}>Inspection frequency is within normal range.</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-          {/* ── HIDDEN RISK SIGNALS ── */}
-          {insights && (insights.long_open_count ?? 0) + (insights.multi_agency_count ?? 0) + (insights.oldest_open_violation_days ?? 0) > 0 && (
-            <div className="rp-section">
-              <div className="rp-section-title">Hidden Risk Signals</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {(insights.oldest_open_violation_days ?? 0) > 365 && (
-                  <div className="rp-alert amber">
-                    <div className="rp-alert-icon">🕐</div>
-                    <div className="rp-alert-body">
-                      <div className="rp-alert-title">Aging open violations</div>
-                      <p>The oldest unresolved violation has been open for <strong>{Math.round((insights.oldest_open_violation_days ?? 0) / 365 * 10) / 10} years</strong>
-                        {(insights.long_open_count ?? 0) > 0 && <>, and <strong>{insights.long_open_count}</strong> violation{insights.long_open_count !== 1 ? "s are" : " is"} more than 3 years old</>}.
-                        Long-standing violations often compound over time and attract additional enforcement.
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {(insights.multi_agency_count ?? 0) > 2 && (
-                  <div className="rp-alert amber">
-                    <div className="rp-alert-icon">🏛️</div>
-                    <div className="rp-alert-body">
-                      <div className="rp-alert-title">Multiple agencies citing same periods</div>
-                      <p>In <strong>{insights.multi_agency_count}</strong> separate months, more than one city agency issued violations on the same day — a pattern that indicates systemic issues rather than isolated incidents.</p>
-                    </div>
-                  </div>
-                )}
-                {((insights.inspection_days_peer_avg !== null && (insights.inspection_days_12m ?? 0) > (insights.inspection_days_peer_avg ?? 0) * 2) ||
-                  (insights.inspection_days_peer_avg === null && (insights.inspection_days_12m ?? 0) > 6)) && (
-                  <div className="rp-alert red">
-                    <div className="rp-alert-icon">🔍</div>
-                    <div className="rp-alert-body">
-                      <div className="rp-alert-title">High inspection frequency</div>
-                      <p>This building is being inspected <strong>{(insights.inspection_days_12m ?? 0)}×</strong> per year — more than twice the peer average of {(insights.inspection_days_peer_avg ?? 0).toFixed(1)}×. Frequent inspections often indicate that prior violations were not fully resolved.</p>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           )}
