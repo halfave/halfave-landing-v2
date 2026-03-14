@@ -10,6 +10,9 @@ const supabase = createClient(
 // ─── Types ───────────────────────────────────────────────────────────────────
 import type { Building, RiskScore, BuildingFeatures, Violation, BoroughStat, HalfaveWindow, HalfaveBldgWindow } from "../types";
 
+// ─── Local Types ─────────────────────────────────────────────────────────────
+type OwnershipStat = { ownership: string; avg_score: number; count: number };
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const BOROUGH_NAMES: Record<string, string> = {
   "1": "Manhattan",
@@ -572,96 +575,40 @@ const CSS = `
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ── BOROUGH MAP ── */
-  .rp-borough-wrap {
-    display: grid;
-    grid-template-columns: 240px 1fr;
-    gap: 32px;
-    align-items: start;
-    padding: 24px;
-  }
-  .rp-borough-map-svg { width: 180px; height: auto; flex-shrink: 0; }
-  .rp-borough-path {
-    stroke: var(--cream);
-    stroke-width: 1.5;
-    stroke-linejoin: round;
-    cursor: default;
-    transition: opacity 0.15s;
-  }
-  .rp-borough-path:hover { opacity: 0.85; }
-  .rp-borough-label {
-    font-family: 'DM Mono', 'Courier New', monospace;
-    font-size: 9px;
-    font-weight: 600;
-    fill: rgba(255,255,255,0.9);
-    text-anchor: middle;
-    pointer-events: none;
-    letter-spacing: 0.04em;
-  }
-  .rp-borough-score-label {
+  /* ── BOROUGH MAP ── */  .rp-borough-map-svg { width: 180px; height: auto; flex-shrink: 0; }  .rp-borough-path:hover { opacity: 0.85; }  .rp-borough-score-label {
     font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 11px;
     font-weight: 700;
     fill: rgba(255,255,255,0.95);
     text-anchor: middle;
     pointer-events: none;
-  }
-  .rp-borough-bars { display: flex; flex-direction: column; gap: 0; }
-  .rp-borough-bar-row {
+  }  .rp-borough-bar-row {
     display: grid;
     grid-template-columns: 90px 1fr 52px 60px;
     align-items: center;
     gap: 10px;
     padding: 11px 0;
     border-bottom: 1px solid var(--navy-10);
-  }
-  .rp-borough-bar-row:last-child { border-bottom: none; }
-  .rp-borough-bar-name {
+  }  .rp-borough-bar-name {
     font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 12px;
     color: var(--navy);
-  }
-  .rp-borough-bar-track {
-    height: 6px;
-    background: var(--navy-10);
-    border-radius: 3px;
-    overflow: hidden;
-  }
-  .rp-borough-bar-fill {
+  }  .rp-borough-bar-fill {
     height: 100%;
     border-radius: 3px;
-  }
-  .rp-borough-bar-val {
-    font-family: 'DM Mono', 'Courier New', monospace;
-    font-size: 13px;
-    font-weight: 700;
-    text-align: right;
-  }
-  .rp-borough-bar-count {
+  }  .rp-borough-bar-count {
     font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 10px;
     color: var(--slate);
     text-align: right;
-  }
-  .rp-borough-legend {
-    display: flex;
-    gap: 16px;
-    padding: 12px 24px;
-    border-top: 1px solid var(--navy-10);
-    flex-wrap: wrap;
-  }
-  .rp-borough-legend-item {
+  }  .rp-borough-legend-item {
     display: flex;
     align-items: center;
     gap: 6px;
     font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 11px;
     color: var(--slate);
-  }
-  .rp-borough-legend-dot {
-    width: 10px; height: 10px; border-radius: 2px;
-  }
-  @media (max-width: 680px) {
+  }  @media (max-width: 680px) {
     .rp-borough-wrap { grid-template-columns: 1fr; }
   }
 
@@ -685,8 +632,7 @@ function boroughScoreColor(score: number) {
 
 // ─── Driver icon/color map ────────────────────────────────────────────────────
 
-// ─── Accurate NYC Borough SVG Map ─────────────────────────────────────────────
-function BoroughMap({ stats, highlight }: { stats: BoroughStat[]; highlight?: string }) {
+// ─── Accurate NYC Borough SVG Map ─────────────────────────────────────────────: { stats: BoroughStat[]; highlight?: string }) {
   const statMap = Object.fromEntries(stats.map((s) => [s.name, s]));
   // Real SVG paths from Wikipedia NYC borough map (viewBox 0 0 549 524)
   const PATHS: Record<string, { d: string; lx: number; ly: number }> = {
@@ -1111,6 +1057,7 @@ export default function ReportPage(_props: ReportPageProps) {
   const [features, setFeatures] = useState<BuildingFeatures | null>(null);
   const [violations, setViolations] = useState<Violation[]>([]);
   const [boroughStats, setBoroughStats] = useState<BoroughStat[]>([]);
+  const [ownershipStats, setOwnershipStats] = useState<OwnershipStat[]>([]);
   const [insights, setInsights] = useState<BuildingInsights | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1313,17 +1260,15 @@ export default function ReportPage(_props: ReportPageProps) {
       const boroughNameMap: Record<string, string> = {
         "1": "Manhattan", "2": "Bronx", "3": "Brooklyn", "4": "Queens", "5": "Staten Island",
       };
-      Promise.all([
-        // Pre-aggregated borough stats via RPC
+Promise.all([
         supabase.rpc("borough_avg_scores"),
-        // Peer avg by BIN
+        supabase.rpc("ownership_avg_scores"),
         w?.bin ? (supabase as any)
           .from("buildings")
           .select("building_insights(inspection_days_peer_avg)")
           .eq("bin", String(w.bin))
           .single() : Promise.resolve({ data: null }),
-      ]).then(([boroughRes, peerRes]: any[]) => {
-        // Borough stats
+      ]).then(([boroughRes, ownershipRes, peerRes]: any[]) => {
         if (boroughRes.data) {
           const stats: BoroughStat[] = boroughRes.data.map((r: any) => ({
             name: boroughNameMap[String(r.borough)] ?? String(r.borough),
@@ -1332,7 +1277,14 @@ export default function ReportPage(_props: ReportPageProps) {
           })).filter((s: BoroughStat) => s.name);
           setBoroughStats(stats);
         }
-        // Peer avg
+        if (ownershipRes.data) {
+          const ostats: OwnershipStat[] = ownershipRes.data.map((r: any) => ({
+            ownership: r.ownership,
+            avg_score: Math.round(Number(r.avg_score) * 10) / 10,
+            count: Number(r.count),
+          }));
+          setOwnershipStats(ostats);
+        }
         const peerRow = peerRes.data?.building_insights;
         const peerAvg = Array.isArray(peerRow)
           ? peerRow[0]?.inspection_days_peer_avg
@@ -1828,64 +1780,6 @@ export default function ReportPage(_props: ReportPageProps) {
 
 
 
-          {/* ── RISK BY BOROUGH ── */}
-          {boroughStats.length > 0 && (
-            <div className="rp-section">
-              <div className="rp-section-title">
-                Risk by Borough
-                <span style={{ fontFamily: "'Inter', -apple-system, sans-serif", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
-                  Average risk score
-                </span>
-              </div>
-              <div className="rp-card">
-                <div className="rp-borough-wrap">
-                  <BoroughMap stats={boroughStats} highlight={boroughName} />
-                  <div className="rp-borough-bars">
-                    {[...boroughStats]
-                      .sort((a, b) => b.avg_score - a.avg_score)
-                      .map((s) => (
-                        <div className="rp-borough-bar-row" key={s.name}>
-                          <span className="rp-borough-bar-name">{s.name}</span>
-                          <div className="rp-borough-bar-track">
-                            <div
-                              className="rp-borough-bar-fill"
-                              style={{
-                                width: `${(s.avg_score / 100) * 100}%`,
-                                background: boroughScoreColor(s.avg_score),
-                              }}
-                            />
-                          </div>
-                          <span
-                            className="rp-borough-bar-val"
-                            style={{ color: boroughScoreColor(s.avg_score) }}
-                          >
-                            {s.avg_score.toFixed(1)}
-                          </span>
-                          <span className="rp-borough-bar-count">
-                            {s.count.toLocaleString()} bldgs
-                          </span>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-                <div className="rp-borough-legend">
-                  <div className="rp-borough-legend-item">
-                    <div className="rp-borough-legend-dot" style={{ background: "#3a7d5e" }} />
-                    &lt; 20 — Low
-                  </div>
-                  <div className="rp-borough-legend-item">
-                    <div className="rp-borough-legend-dot" style={{ background: "#c9a227" }} />
-                    20–35 — Moderate
-                  </div>
-                  <div className="rp-borough-legend-item">
-                    <div className="rp-borough-legend-dot" style={{ background: "#c4533a" }} />
-                    &gt; 35 — Elevated
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* ── PEER COMPARISON ── */}
           {peerRows.length > 0 && (
             <div className="rp-section">
@@ -1897,6 +1791,76 @@ export default function ReportPage(_props: ReportPageProps) {
               </div>
               <div style={{ marginTop: 8, fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--slate)" }}>
                 Gray marker = NYC building average. Bar = this building.
+              </div>
+            </div>
+          )}
+
+          {/* ── CONTEXT TABLES (dark navy background) ── */}
+          {(boroughStats.length > 0 || ownershipStats.length > 0) && (
+            <div style={{ background: "#111e30", borderRadius: 16, padding: "24px", margin: "0 0 32px" }}>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 16 }}>
+                NYC context — all buildings
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 16 }}>
+
+                {/* Borough table */}
+                {boroughStats.length > 0 && (
+                  <div>
+                    <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>By Borough</div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'Inter', -apple-system, sans-serif", fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+                          <th style={{ padding: "8px 12px", textAlign: "left", fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontWeight: 600 }}>Borough</th>
+                          <th style={{ padding: "8px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontWeight: 600 }}>Avg Index</th>
+                          <th style={{ padding: "8px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontWeight: 600 }}>Bldgs</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...boroughStats].sort((a, b) => b.avg_score - a.avg_score).map((s, i, arr) => (
+                          <tr key={s.name} style={{ borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none", background: s.name === boroughName ? "rgba(255,255,255,0.07)" : "transparent" }}>
+                            <td style={{ padding: "8px 12px", color: "rgba(255,255,255,0.9)", fontWeight: s.name === boroughName ? 600 : 400 }}>
+                              {s.name}{s.name === boroughName && <span style={{ marginLeft: 6, fontSize: 9, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.35)" }}>←</span>}
+                            </td>
+                            <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", fontWeight: 600, color: boroughScoreColor(s.avg_score) }}>{s.avg_score.toFixed(1)}</td>
+                            <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.35)" }}>{s.count.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Ownership table */}
+                {ownershipStats.length > 0 && (
+                  <div>
+                    <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>By Ownership</div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'Inter', -apple-system, sans-serif", fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+                          <th style={{ padding: "8px 12px", textAlign: "left", fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontWeight: 600 }}>Type</th>
+                          <th style={{ padding: "8px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontWeight: 600 }}>Avg Index</th>
+                          <th style={{ padding: "8px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontWeight: 600 }}>Bldgs</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          const isPrivate = (building.management_program ?? "") === "PVT";
+                          const thisOwnership = isPrivate ? "Private" : "Public / Regulated";
+                          return [...ownershipStats].sort((a, b) => b.avg_score - a.avg_score).map((s, i, arr) => (
+                            <tr key={s.ownership} style={{ borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none", background: s.ownership === thisOwnership ? "rgba(255,255,255,0.07)" : "transparent" }}>
+                              <td style={{ padding: "8px 12px", color: "rgba(255,255,255,0.9)", fontWeight: s.ownership === thisOwnership ? 600 : 400 }}>
+                                {s.ownership}{s.ownership === thisOwnership && <span style={{ marginLeft: 6, fontSize: 9, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.35)" }}>←</span>}
+                              </td>
+                              <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", fontWeight: 600, color: boroughScoreColor(s.avg_score) }}>{s.avg_score.toFixed(1)}</td>
+                              <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.35)" }}>{s.count.toLocaleString()}</td>
+                            </tr>
+                          ));
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
               </div>
             </div>
           )}
