@@ -1336,17 +1336,92 @@ export default function ReportPage(_props: ReportPageProps) {
         }
       } catch (_) { /* borough stats optional */ }
 
-      // Fetch building insights (inspection frequency, momentum, hidden risks)
-      if (resolvedBldg.id && !resolvedBldg.id.startsWith('bin-')) {
-        try {
-          const { data: insData } = await (supabase as any)
-            .from("building_insights")
-            .select("*")
-            .eq("building_id", resolvedBldg.id)
-            .single();
-          if (insData) setInsights(insData);
-        } catch (_) { /* insights optional */ }
-      }
+      // Compute insights client-side from window violation data
+      try {
+        const ww = (window as HalfaveWindow).__halfaveBldg;
+        const vw = ww?.violations;
+        if (vw) {
+          const allViolations = [
+            ...(vw.hpd?.open || []).map((v: any) => ({ ...v, agency: "HPD", is_open: true })),
+            ...(vw.hpd?.closed || []).map((v: any) => ({ ...v, agency: "HPD", is_open: false })),
+            ...(vw.dob?.open || []).map((v: any) => ({ ...v, agency: "DOB", is_open: true })),
+            ...(vw.dob?.closed || []).map((v: any) => ({ ...v, agency: "DOB", is_open: false })),
+            ...(vw.ecb?.open || []).map((v: any) => ({ ...v, agency: "ECB", is_open: true })),
+            ...(vw.ecb?.closed || []).map((v: any) => ({ ...v, agency: "ECB", is_open: false })),
+            ...(vw.oath || []).map((v: any) => ({ ...v, agency: "OATH", is_open: true })),
+            ...(vw.sanitation || []).map((v: any) => ({ ...v, agency: "DSNY", is_open: true })),
+            ...(vw.dohmh || []).map((v: any) => ({ ...v, agency: "DOHMH", is_open: true })),
+            ...(vw.nypd || []).map((v: any) => ({ ...v, agency: "NYPD", is_open: true })),
+          ];
+
+          const now = new Date();
+          const twelveMonthsAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          const threeYearsAgo = new Date(now.getTime() - 3 * 365 * 24 * 60 * 60 * 1000);
+          const currentYear = now.getFullYear();
+
+          // Inspection frequency: distinct dates in last 12m
+          const recentDates = new Set<string>();
+          for (const v of allViolations) {
+            const d = v.date || v.novissueddate || v.issue_date || "";
+            if (d && new Date(d) >= twelveMonthsAgo) recentDates.add(d.slice(0, 10));
+          }
+          const inspection_days_12m = recentDates.size;
+
+          // Multi-agency: months where 2+ agencies issued violations
+          const byMonth: Record<string, Set<string>> = {};
+          for (const v of allViolations) {
+            const d = v.date || v.novissueddate || v.issue_date || "";
+            if (!d) continue;
+            const ym = d.slice(0, 7);
+            if (!byMonth[ym]) byMonth[ym] = new Set();
+            byMonth[ym].add(v.agency);
+          }
+          const multi_agency_count = Object.values(byMonth).filter(s => s.size > 1).length;
+
+          // Violations by year (last 5)
+          const violations_by_year: Record<string, number> = {};
+          for (const v of allViolations) {
+            const d = v.date || v.novissueddate || v.issue_date || "";
+            if (!d) continue;
+            const yr = new Date(d).getFullYear();
+            if (yr >= currentYear - 5 && yr <= currentYear) {
+              violations_by_year[yr] = (violations_by_year[yr] || 0) + 1;
+            }
+          }
+          const violations_5yr_total = Object.values(violations_by_year).reduce((a, b) => a + b, 0);
+          const recent2 = (violations_by_year[currentYear] || 0) + (violations_by_year[currentYear - 1] || 0);
+          const prior2 = (violations_by_year[currentYear - 3] || 0) + (violations_by_year[currentYear - 4] || 0);
+          const violations_5yr_trend = recent2 > prior2 * 1.1 ? "increasing" : recent2 < prior2 * 0.9 ? "decreasing" : "stable";
+
+          // Oldest open violation
+          let oldestDays = 0;
+          let long_open_count = 0;
+          for (const v of allViolations) {
+            if (!v.is_open) continue;
+            const d = v.date || v.novissueddate || v.issue_date || "";
+            if (!d) continue;
+            const days = Math.floor((now.getTime() - new Date(d).getTime()) / (1000 * 60 * 60 * 24));
+            if (days > oldestDays) oldestDays = days;
+            if (new Date(d) < threeYearsAgo) long_open_count++;
+          }
+
+          // Unit band from window
+          const units = ww?.units ? parseInt(String(ww.units)) : 0;
+          const unit_band = units <= 20 ? "1–20" : units <= 50 ? "20–50" : units <= 100 ? "50–100" : units <= 250 ? "100–250" : "250+";
+
+          setInsights({
+            inspection_days_12m,
+            inspection_days_peer_avg: null, // no peer data client-side
+            unit_band,
+            violations_by_year,
+            violations_5yr_total,
+            violations_5yr_trend: violations_5yr_trend as "increasing" | "decreasing" | "stable",
+            oldest_open_violation_days: oldestDays,
+            multi_agency_count,
+            long_open_count,
+          });
+        }
+      } catch (_) { /* insights optional */ }
     } catch (e: any) {
       setError(e?.message || "Failed to load report.");
     } finally {
@@ -1678,7 +1753,8 @@ export default function ReportPage(_props: ReportPageProps) {
                     </div>
                   </div>
                 )}
-                {(insights.inspection_days_12m ?? 0) > (insights.inspection_days_peer_avg ?? 0) * 2 && (
+                {((insights.inspection_days_peer_avg !== null && (insights.inspection_days_12m ?? 0) > (insights.inspection_days_peer_avg ?? 0) * 2) ||
+                  (insights.inspection_days_peer_avg === null && (insights.inspection_days_12m ?? 0) > 6)) && (
                   <div className="rp-alert red">
                     <div className="rp-alert-icon">🔍</div>
                     <div className="rp-alert-body">
