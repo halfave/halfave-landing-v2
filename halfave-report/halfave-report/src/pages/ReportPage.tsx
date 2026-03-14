@@ -41,20 +41,6 @@ function riskBg(percentile: number) {
   return "var(--risk-green-bg)";
 }
 
-function severityLabel(s?: string, agency?: string) {
-  if (!s) return "–";
-  if (agency === "HPD") return `Class ${s}`;
-  if (s.startsWith("CLASS")) return s.replace("CLASS - ", "ECB Class ");
-  return s;
-}
-
-function severityColor(s?: string) {
-  const u = (s ?? "").toUpperCase();
-  if (u === "C" || u === "CLASS - 1") return "#c4533a";
-  if (u === "B" || u === "CLASS - 2") return "#d97b3a";
-  return "#c9a227";
-}
-
 function fmt(n?: number | null, fallback = "–") {
   if (n == null) return fallback;
   return n.toLocaleString();
@@ -781,101 +767,6 @@ function BoroughMap({ stats, highlight }: { stats: BoroughStat[]; highlight?: st
   if (dl.includes("penalty") || dl.includes("balance") || dl.includes("fine")) return { icon: "💰", bg: "#fdf8ec", color: "#c9a227" };
   return { icon: "⚡", bg: "#f0ede8", color: "#7a8fa6" };
 }
-
-// ─── Violation Row ─────────────────────────────────────────────────────────────
-: {
-  v: Violation;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const sc = severityColor(v.severity);
-  const hasDetail = !!(v.description || v.order_number || v.penalty_amount || v.balance_due || v.disposition);
-
-  return (
-    <>
-      <tr className={hasDetail ? "expandable" : ""} onClick={hasDetail ? onToggle : undefined}>
-        <td>
-          <span
-            className="rp-sev-badge"
-            style={{ background: sc + "22", color: sc }}
-          >
-            {severityLabel(v.severity, v.agency)}
-          </span>
-        </td>
-        <td style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {v.violation_type || v.description?.slice(0, 60) || "–"}
-        </td>
-        <td>
-          <span className={`rp-status-dot ${v.is_open ? "open" : "closed"}`}>
-            {v.is_open ? "Open" : "Closed"}
-          </span>
-        </td>
-        <td style={{ color: "var(--slate)" }}>{fmtDate(v.issue_date)}</td>
-        <td style={{ textAlign: "right" }}>
-          {hasDetail && (
-            <span style={{ color: "var(--slate)", fontSize: 10 }}>
-              {expanded ? "▲" : "▼"}
-            </span>
-          )}
-        </td>
-      </tr>
-      {expanded && hasDetail && (
-        <tr className="rp-expand-row">
-          <td colSpan={5}>
-            <div className="rp-expand-inner">
-              {v.description && (
-                <div className="rp-expand-field rp-expand-desc">
-                  <span className="rp-expand-key">Description</span>
-                  <span>{v.description}</span>
-                </div>
-              )}
-              {v.order_number && (
-                <div className="rp-expand-field">
-                  <span className="rp-expand-key">Order #</span>
-                  <span>{v.order_number}</span>
-                </div>
-              )}
-              {v.violation_code && (
-                <div className="rp-expand-field">
-                  <span className="rp-expand-key">Code</span>
-                  <span>{v.violation_code}</span>
-                </div>
-              )}
-              {v.penalty_amount != null && (
-                <div className="rp-expand-field">
-                  <span className="rp-expand-key">Penalty</span>
-                  <span>{fmtCurrency(v.penalty_amount)}</span>
-                </div>
-              )}
-              {v.balance_due != null && (
-                <div className="rp-expand-field">
-                  <span className="rp-expand-key">Balance Due</span>
-                  <span style={{ color: v.balance_due > 0 ? "var(--risk-red)" : undefined }}>
-                    {fmtCurrency(v.balance_due)}
-                  </span>
-                </div>
-              )}
-              {v.disposition && (
-                <div className="rp-expand-field">
-                  <span className="rp-expand-key">Disposition</span>
-                  <span>{v.disposition}</span>
-                </div>
-              )}
-              {v.close_date && (
-                <div className="rp-expand-field">
-                  <span className="rp-expand-key">Closed</span>
-                  <span>{fmtDate(v.close_date)}</span>
-                </div>
-              )}
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
-  );
-}
-
-// ─── Violation Tabs ────────────────────────────────────────────────────────────
 
 // ─── Violation + Inspection Tabs ─────────────────────────────────────────────
 type VTab = "HPD" | "DOB" | "ECB_OATH" | "Inspections" | "TCO";
