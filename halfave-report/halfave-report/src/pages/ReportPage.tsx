@@ -41,14 +41,6 @@ function riskBg(percentile: number) {
   return "var(--risk-green-bg)";
 }
 
-function severityWeight(s?: string) {
-  if (!s) return 0;
-  const u = s.toUpperCase();
-  if (u === "C" || u === "CLASS - 1") return 3;
-  if (u === "B" || u === "CLASS - 2") return 2;
-  return 1;
-}
-
 function severityLabel(s?: string, agency?: string) {
   if (!s) return "–";
   if (agency === "HPD") return `Class ${s}`;
@@ -66,15 +58,6 @@ function severityColor(s?: string) {
 function fmt(n?: number | null, fallback = "–") {
   if (n == null) return fallback;
   return n.toLocaleString();
-}
-
-function fmtDate(d?: string | null) {
-  if (!d) return "–";
-  return new Date(d).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 function fmtCurrency(n?: number | null) {
@@ -784,7 +767,7 @@ function BoroughMap({ stats, highlight }: { stats: BoroughStat[]; highlight?: st
   );
 }
 
-function driverMeta(d: string): { icon: string; bg: string; color: string } {
+ {
   const dl = d.toLowerCase();
   if (dl.includes("boiler")) return { icon: "🔥", bg: "#fdf0ed", color: "#c4533a" };
   if (dl.includes("elevator") || dl.includes("lift")) return { icon: "🏗️", bg: "#fdf0ed", color: "#c4533a" };
@@ -800,7 +783,7 @@ function driverMeta(d: string): { icon: string; bg: string; color: string } {
 }
 
 // ─── Violation Row ─────────────────────────────────────────────────────────────
-function ViolationRow({ v, expanded, onToggle }: {
+: {
   v: Violation;
   expanded: boolean;
   onToggle: () => void;
@@ -893,7 +876,6 @@ function ViolationRow({ v, expanded, onToggle }: {
 }
 
 // ─── Violation Tabs ────────────────────────────────────────────────────────────
-type SortKey = "severity" | "issue_date" | "is_open" | "violation_type";
 
 // ─── Violation + Inspection Tabs ─────────────────────────────────────────────
 type VTab = "HPD" | "DOB" | "ECB_OATH" | "Inspections" | "TCO";
@@ -988,12 +970,7 @@ function ViolRow({ v }: { v: UnifiedViolation }) {
   );
 }
 
-function OpenViolationTabs({ violations, elevators, boilers, co }: {
-  violations: Violation[];
-  elevators: any[];
-  boilers: any[];
-  co: any | null;
-}) {
+function OpenViolationTabs(_props: { violations: Violation[]; elevators: any[]; boilers: any[]; co: any | null }) {
   const w = (window as any).__halfaveBldg || {};
   const vw = w.violations || {};
 
@@ -1519,7 +1496,6 @@ export default function ReportPage(_props: ReportPageProps) {
   const pct = rs?.percentile ?? 0;
   const score = rs?.risk_score ?? 0;
   const bucket = rs?.risk_bucket ?? "Unknown";
-  const drivers = rs?.top_drivers?.drivers ?? [];
   const boroughName = getBoroughName(building.borough);
 
   const openViolations = features?.open_violations ?? violations.filter((v) => v.is_open).length;
