@@ -1060,7 +1060,7 @@ export default function ReportPage(_props: ReportPageProps) {
           const bal = parseFloat(v.balance_due ?? "NaN");
           return !(cert !== "NO COMPLIANCE RECORDED" && !isNaN(bal) && bal === 0);
         }) : [];
-        const dobOpen = Array.isArray(dobViolRaw) ? dobViolRaw.filter((v: any) => !((v.violation_category || "").includes("V*"))) : [];
+        const dobOpen = Array.isArray(dobViolRaw) ? dobViolRaw.filter((v: any) => (v.violation_category || "").trim() === "V-DOB VIOLATION - ACTIVE") : [];
 
         let pts = classC.length * 4 + classB.length * 2 + (openHpd.length - classC.length - classB.length) * 0.5
           + dobOpen.length * 2 + ecbOpen.length * 2;
