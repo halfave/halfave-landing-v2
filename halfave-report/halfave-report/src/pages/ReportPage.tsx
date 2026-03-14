@@ -84,7 +84,6 @@ function fmtCurrency(n?: number | null) {
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
 const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
   :root {
     --navy: #111e30;
     --cream: #f7f4ef;
@@ -1312,7 +1311,10 @@ export default function ReportPage(_props: ReportPageProps) {
   if (loading) {
     return (
       <>
-        <style>{CSS}</style>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+      <style>{CSS}</style>
         <div className="rp-root">
           <div className="rp-loading">
             <div className="rp-spinner" />
@@ -1326,7 +1328,10 @@ export default function ReportPage(_props: ReportPageProps) {
   if (error || !building) {
     return (
       <>
-        <style>{CSS}</style>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+      <style>{CSS}</style>
         <div className="rp-root">
           <div className="rp-loading">
             <span style={{ color: "var(--risk-red)" }}>⚠ {error || "Report unavailable"}</span>
@@ -1391,6 +1396,9 @@ export default function ReportPage(_props: ReportPageProps) {
 
   return (
     <>
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
       <style>{CSS}</style>
       <div className="rp-root">
         {/* ── HERO ── */}
