@@ -398,6 +398,7 @@ const CSS = `
   .rp-vtable tbody tr:hover { background: rgba(17,30,48,0.02); }
   .rp-vtable tbody tr.expandable { cursor: pointer; }
   .rp-vtable td {
+    font-family: var(--font-sans) !important; font-size: 13px;
     padding: 10px 14px;
     font-family: var(--font-sans);
     font-size: 12px;
@@ -1317,7 +1318,7 @@ export default function ReportPage(_props: ReportPageProps) {
       };
       Promise.all([
         // Pre-aggregated borough stats via RPC
-        (supabase as any).schema("analytics").rpc("borough_avg_scores"),
+        supabase.rpc("borough_avg_scores"),
         // Peer avg by BIN
         w?.bin ? (supabase as any)
           .from("buildings")
@@ -1437,6 +1438,16 @@ export default function ReportPage(_props: ReportPageProps) {
     }
   }, []);
 
+  // Inject Google Fonts into document.head
+  useEffect(() => {
+    if (document.getElementById("halfave-fonts")) return;
+    const link = document.createElement("link");
+    link.id = "halfave-fonts";
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap";
+    document.head.appendChild(link);
+  }, []);
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
@@ -1444,9 +1455,7 @@ export default function ReportPage(_props: ReportPageProps) {
   if (loading) {
     return (
       <>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
       <style>{CSS}</style>
         <div className="rp-root">
           <div className="rp-loading">
@@ -1524,9 +1533,7 @@ export default function ReportPage(_props: ReportPageProps) {
 
   return (
     <>
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
       <style>{CSS}</style>
       <div className="rp-root">
         {/* ── HERO ── */}
