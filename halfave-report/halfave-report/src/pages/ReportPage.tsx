@@ -84,6 +84,7 @@ function fmtCurrency(n?: number | null) {
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
 const CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
   :root {
     --navy: #111e30;
     --cream: #f7f4ef;
@@ -98,12 +99,13 @@ const CSS = `
     --navy-10: rgba(17,30,48,0.08);
     --navy-20: rgba(17,30,48,0.15);
     --font-serif: 'Lora', Georgia, serif;
-    --font-mono: 'DM Mono', 'Courier New', monospace;
+    --font-sans:  'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono:  'DM Mono', 'Courier New', monospace;
     --radius: 12px;
     --radius-lg: 16px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--navy); font-family: var(--font-serif); }
+  body { background: var(--bg); color: var(--navy); font-family: var(--font-sans); }
 
   .rp-root { min-height: 100vh; background: var(--bg); }
 
@@ -1079,8 +1081,105 @@ export default function ReportPage(_props: ReportPageProps) {
     setLoading(true);
     setError(null);
     try {
-      const w = (window as HalfaveWindow).__halfaveBldg;
-      if (!w?.bin) throw new Error("No building data found. Please search for a building first.");
+      let w = (window as HalfaveWindow).__halfaveBldg;
+
+      // If arriving from email link (?bin=XXXX) with no window data, fetch from NYC Open Data
+      if (!w?.bin) {
+        const urlBin = new URLSearchParams(window.location.search).get("bin");
+        if (!urlBin) throw new Error("No building data found. Please search for a building first.");
+
+        const NYC_TOKEN = "hfh9po4tOCXZP5lkaDao0FLd1";
+        const headers = { "X-App-Token": NYC_TOKEN };
+
+        const [dobRes, hpdBldgRes, hpdViolRes, ecbRes, dobViolRes] = await Promise.all([
+          fetch(`https://data.cityofnewyork.us/resource/w9ak-ipjd.json?bin=${urlBin}&$limit=1`, { headers }),
+          fetch(`https://data.cityofnewyork.us/resource/kj4p-ruqc.json?bin=${urlBin}&$limit=1`, { headers }),
+          fetch(`https://data.cityofnewyork.us/resource/wvxf-dwi5.json?bin=${urlBin}&$limit=500`, { headers }),
+          fetch(`https://data.cityofnewyork.us/resource/6bgk-3dad.json?bin=${urlBin}&$limit=200`, { headers }).catch(() => ({ json: () => [] })),
+          fetch(`https://data.cityofnewyork.us/resource/3h2n-5cm9.json?bin=${urlBin}&$limit=200`, { headers }),
+        ]);
+
+        const [dobData, hpdBldgRaw, hpdViolRaw, ecbRaw, dobViolRaw] = await Promise.all([
+          dobRes.json(), hpdBldgRes.json(), hpdViolRes.json(),
+          (ecbRes as any).json ? (ecbRes as any).json() : Promise.resolve([]),
+          dobViolRes.json(),
+        ]);
+
+        const bldg = Array.isArray(dobData) && dobData.length > 0 ? dobData[0] : {};
+        const hb = Array.isArray(hpdBldgRaw) && hpdBldgRaw.length > 0 ? hpdBldgRaw[0] : {};
+        const boroNames: Record<string, string> = { "1": "Manhattan", "2": "Bronx", "3": "Brooklyn", "4": "Queens", "5": "Staten Island" };
+        const boroName = boroNames[String(hb.boroid || bldg.boro)] || bldg.boro_nm || "";
+        const address = [
+          ((bldg.house_no || "") + " " + (bldg.street_name || "")).trim() || hb.buildingaddress || "",
+          boroName, "NY",
+        ].filter(Boolean).join(", ") || `BIN ${urlBin}`;
+
+        // Quick risk score from HPD violations
+        const hpd = Array.isArray(hpdViolRaw) ? hpdViolRaw : [];
+        const openHpd = hpd.filter((v: any) => {
+          const s = (v.currentstatus || v.violationstatus || "").toLowerCase();
+          return !s.includes("close") && !s.includes("dismiss");
+        });
+        const classC = openHpd.filter((v: any) => (v.class || v.novtype || "").toUpperCase().startsWith("C"));
+        const classB = openHpd.filter((v: any) => (v.class || v.novtype || "").toUpperCase().startsWith("B"));
+        const ecbOpen = Array.isArray(ecbRaw) ? ecbRaw.filter((v: any) => {
+          const cert = (v.certification_status || "").toUpperCase().trim();
+          const bal = parseFloat(v.balance_due ?? "NaN");
+          return !(cert !== "NO COMPLIANCE RECORDED" && !isNaN(bal) && bal === 0);
+        }) : [];
+        const dobOpen = Array.isArray(dobViolRaw) ? dobViolRaw.filter((v: any) => !((v.violation_category || "").includes("V*"))) : [];
+
+        let pts = classC.length * 4 + classB.length * 2 + (openHpd.length - classC.length - classB.length) * 0.5
+          + dobOpen.length * 2 + ecbOpen.length * 2;
+        pts = Math.min(pts, 50);
+        const riskScore = Math.max(Math.min(Math.round(pts), 100), 5);
+        const pctMap = [5,10,20,30,40,50,60,70,80,90,100];
+        const pctVal = [8,20,35,48,60,70,78,85,91,96,99];
+        const percentile = pctVal[pctMap.findIndex(x => riskScore <= x) ?? 10];
+        const riskBucket = riskScore >= 70 ? "Critical" : riskScore >= 55 ? "High Risk" : riskScore >= 35 ? "Elevated" : riskScore >= 20 ? "Watch" : "Healthy";
+
+        // Synthesize violations for the tabs
+        const toW = (arr: any[], isOpen: boolean) => arr.map((v: any) => ({
+          id: v.violationid || v.number || v.ecb_violation_number || "",
+          desc: v.novdescription || v.description || v.section_law_description1 || "",
+          date: v.novissueddate || v.issue_date || "",
+          cls: (v.class || v.novtype || "").toUpperCase().trim().charAt(0),
+          isOpen,
+          penalty: v.balance_due ? parseFloat(v.balance_due) : null,
+          apt: v.apartment || "",
+        }));
+
+        (window as HalfaveWindow).__halfaveBldg = {
+          bin: urlBin,
+          address,
+          bbl: "",
+          stories: hb.legalstories || bldg.num_floors || "",
+          units: hb.legalclassa || bldg.units_res || "",
+          yearBuilt: hb.yearbuilt || "",
+          zipcode: bldg.zipcode || "",
+          borough: boroName,
+          boroName,
+          riskScore,
+          percentile,
+          riskBucket,
+          openViolations: openHpd.length + dobOpen.length + ecbOpen.length,
+          recent12m: openHpd.filter((v: any) => {
+            try { return new Date(v.novissueddate) >= new Date(Date.now() - 365*24*60*60*1000); } catch { return false; }
+          }).length,
+          topDrivers: [
+            classC.length > 0 ? `${classC.length} Class C HPD violation${classC.length > 1 ? "s" : ""}` : null,
+            classB.length > 0 ? `${classB.length} Class B HPD violation${classB.length > 1 ? "s" : ""}` : null,
+            dobOpen.length > 0 ? `${dobOpen.length} open DOB violation${dobOpen.length > 1 ? "s" : ""}` : null,
+          ].filter(Boolean) as string[],
+          violations: {
+            hpd: { open: toW(openHpd, true), closed: toW(hpd.filter((v: any) => !openHpd.includes(v)), false) },
+            dob: { open: toW(dobOpen, true), closed: [] },
+            ecb: { open: toW(ecbOpen, true), closed: [] },
+            oath: [], sanitation: [], dohmh: [], nypd: [],
+          },
+        };
+        w = (window as HalfaveWindow).__halfaveBldg!;
+      }
 
       // Hydrate building from window
       const resolvedBldg: Building = {
