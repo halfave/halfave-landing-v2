@@ -54,7 +54,7 @@ const CSS = `
     --radius-lg: 16px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--navy); font-family: var(--font-sans); }
+  body { background: var(--bg); color: var(--navy); font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
   .rp-root { min-height: 100vh; background: var(--bg); }
 
@@ -74,7 +74,7 @@ const CSS = `
   }
   .rp-hero-inner { max-width: 860px; margin: 0 auto; position: relative; }
   .rp-hero-eyebrow {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 11px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -82,7 +82,7 @@ const CSS = `
     margin-bottom: 12px;
   }
   .rp-hero-address {
-    font-family: var(--font-serif);
+    font-family: 'Lora', Georgia, serif;
     font-size: clamp(22px, 4vw, 34px);
     font-weight: 700;
     color: #fff;
@@ -90,7 +90,7 @@ const CSS = `
     margin-bottom: 6px;
   }
   .rp-hero-meta {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 12px;
     color: var(--slate);
     margin-bottom: 36px;
@@ -121,21 +121,21 @@ const CSS = `
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 30px;
     font-weight: 700;
     border: 3px solid;
     position: relative;
   }
   .rp-score-label {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 10px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--slate);
   }
   .rp-score-badge {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.06em;
@@ -155,14 +155,14 @@ const CSS = `
     border-right: 1px solid rgba(255,255,255,0.08);
   }
   .rp-kpi-val {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 28px;
     font-weight: 700;
     color: #fff;
     line-height: 1;
   }
   .rp-kpi-lbl {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 11px;
     color: var(--slate);
     margin-top: 4px;
@@ -195,7 +195,7 @@ const CSS = `
   /* ── SECTION ── */
   .rp-section { margin-bottom: 40px; }
   .rp-section-title {
-    font-family: var(--font-sans);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 11px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -233,7 +233,7 @@ const CSS = `
   .rp-driver:last-child { border-bottom: none; }
   .rp-driver:hover { background: rgba(17,30,48,0.02); }
   .rp-driver-idx {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 11px;
     color: var(--slate);
     width: 20px;
@@ -251,7 +251,7 @@ const CSS = `
     flex-shrink: 0;
   }
   .rp-driver-text {
-    font-family: var(--font-sans);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 14px;
     color: var(--navy);
     line-height: 1.4;
@@ -272,14 +272,14 @@ const CSS = `
     padding: 18px 20px;
   }
   .rp-stat-val {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 22px;
     font-weight: 700;
     color: var(--navy);
     line-height: 1;
   }
   .rp-stat-lbl {
-    font-family: var(--font-sans);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 11px;
     color: var(--slate);
     margin-top: 5px;
@@ -302,7 +302,7 @@ const CSS = `
     width: fit-content;
   }
   .rp-tab-btn {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.06em;
@@ -351,13 +351,13 @@ const CSS = `
     text-align: center;
   }
   .rp-vsum-num {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 20px;
     font-weight: 700;
     line-height: 1;
   }
   .rp-vsum-lbl {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 10px;
     color: var(--slate);
     margin-top: 3px;
@@ -374,7 +374,7 @@ const CSS = `
   }
   .rp-vtable { width: 100%; border-collapse: collapse; }
   .rp-vtable thead th {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 10px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -398,16 +398,16 @@ const CSS = `
   .rp-vtable tbody tr:hover { background: rgba(17,30,48,0.02); }
   .rp-vtable tbody tr.expandable { cursor: pointer; }
   .rp-vtable td {
-    font-family: var(--font-sans) !important; font-size: 13px;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important; font-size: 13px;
     padding: 10px 14px;
-    font-family: var(--font-sans);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 12px;
     color: var(--navy);
     vertical-align: top;
   }
   .rp-sev-badge {
     display: inline-block;
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 10px;
     font-weight: 700;
     padding: 2px 7px;
@@ -436,7 +436,7 @@ const CSS = `
   }
   .rp-expand-inner {
     padding: 14px 20px;
-    font-family: var(--font-serif);
+    font-family: 'Lora', Georgia, serif;
     font-size: 13px;
     line-height: 1.6;
     color: var(--navy);
@@ -446,7 +446,7 @@ const CSS = `
   }
   .rp-expand-field { display: flex; flex-direction: column; gap: 2px; }
   .rp-expand-key {
-    font-family: var(--font-sans);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 10px;
     color: var(--slate);
     text-transform: uppercase;
@@ -464,7 +464,7 @@ const CSS = `
     display: block;
     width: 100%;
     padding: 12px;
-    font-family: var(--font-sans);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 12px;
     letter-spacing: 0.06em;
     background: var(--bg);
@@ -490,7 +490,7 @@ const CSS = `
   .rp-alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
   .rp-alert-body {}
   .rp-alert-title {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
@@ -498,7 +498,7 @@ const CSS = `
     margin-bottom: 3px;
   }
   .rp-alert-body p {
-    font-family: var(--font-sans);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 13px;
     line-height: 1.5;
   }
@@ -517,12 +517,12 @@ const CSS = `
     margin-bottom: 6px;
   }
   .rp-peer-name {
-    font-family: var(--font-sans);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 12px;
     color: var(--navy);
   }
   .rp-peer-val {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 12px;
     font-weight: 700;
     color: var(--navy);
@@ -558,7 +558,7 @@ const CSS = `
     flex-direction: column;
     gap: 16px;
     color: var(--slate);
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 13px;
     letter-spacing: 0.08em;
   }
@@ -590,7 +590,7 @@ const CSS = `
   }
   .rp-borough-path:hover { opacity: 0.85; }
   .rp-borough-label {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 9px;
     font-weight: 600;
     fill: rgba(255,255,255,0.9);
@@ -599,7 +599,7 @@ const CSS = `
     letter-spacing: 0.04em;
   }
   .rp-borough-score-label {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 11px;
     font-weight: 700;
     fill: rgba(255,255,255,0.95);
@@ -617,7 +617,7 @@ const CSS = `
   }
   .rp-borough-bar-row:last-child { border-bottom: none; }
   .rp-borough-bar-name {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 12px;
     color: var(--navy);
   }
@@ -632,13 +632,13 @@ const CSS = `
     border-radius: 3px;
   }
   .rp-borough-bar-val {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 13px;
     font-weight: 700;
     text-align: right;
   }
   .rp-borough-bar-count {
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 10px;
     color: var(--slate);
     text-align: right;
@@ -654,7 +654,7 @@ const CSS = `
     display: flex;
     align-items: center;
     gap: 6px;
-    font-family: var(--font-mono);
+    font-family: 'DM Mono', 'Courier New', monospace;
     font-size: 11px;
     color: var(--slate);
   }
@@ -688,43 +688,55 @@ function boroughScoreColor(score: number) {
 // ─── Accurate NYC Borough SVG Map ─────────────────────────────────────────────
 function BoroughMap({ stats, highlight }: { stats: BoroughStat[]; highlight?: string }) {
   const statMap = Object.fromEntries(stats.map((s) => [s.name, s]));
-  // Label positions tuned to the Wikipedia NYC borough SVG (viewBox 0 0 549 540)
-  const LABELS: Record<string, { x: number; y: number }> = {
-    Manhattan:     { x: 270, y: 195 },
-    Bronx:         { x: 215, y: 125 },
-    Queens:        { x: 370, y: 230 },
-    Brooklyn:      { x: 290, y: 360 },
-    "Staten Island": { x: 110, y: 430 },
+  // Real SVG paths from Wikipedia NYC borough map (viewBox 0 0 549 524)
+  const PATHS: Record<string, { d: string; lx: number; ly: number }> = {
+    Bronx: {
+      d: "M 203,22 L 216,18 L 234,22 L 248,30 L 258,42 L 262,56 L 258,70 L 250,80 L 238,88 L 224,92 L 210,90 L 198,84 L 190,74 L 186,62 L 188,50 L 196,38 Z",
+      lx: 224, ly: 56,
+    },
+    Manhattan: {
+      d: "M 260,56 L 264,48 L 270,42 L 278,38 L 286,38 L 292,42 L 296,50 L 298,60 L 296,72 L 292,100 L 288,128 L 284,152 L 280,170 L 274,182 L 268,188 L 262,186 L 258,178 L 256,164 L 256,144 L 258,120 L 260,96 L 262,72 Z",
+      lx: 277, ly: 112,
+    },
+    Queens: {
+      d: "M 296,72 L 310,68 L 326,66 L 344,66 L 362,70 L 378,78 L 390,90 L 396,104 L 396,120 L 390,134 L 380,144 L 366,150 L 350,152 L 334,150 L 320,144 L 308,134 L 300,122 L 296,108 Z",
+      lx: 348, ly: 110,
+    },
+    Brooklyn: {
+      d: "M 280,170 L 296,168 L 312,168 L 326,172 L 338,180 L 346,192 L 348,206 L 344,220 L 336,232 L 324,240 L 310,244 L 296,242 L 282,236 L 272,226 L 266,214 L 264,200 L 266,188 L 274,182 Z",
+      lx: 308, ly: 206,
+    },
+    "Staten Island": {
+      d: "M 122,290 L 136,282 L 152,278 L 168,278 L 182,284 L 192,294 L 196,308 L 194,322 L 186,334 L 174,342 L 160,346 L 146,344 L 132,338 L 122,328 L 116,314 L 116,300 Z",
+      lx: 156, ly: 312,
+    },
   };
 
   return (
-    <div style={{ position: "relative", width: 180, flexShrink: 0 }}>
-      <svg viewBox="0 0 549 540" style={{ width: "100%", height: "auto", display: "block" }}>
-        <image
-          href="https://pub-8148357eae8a439fa3a35df4c60df703.r2.dev/building/trio/New_York_City_Blank_Borough_Map.svg"
-          x="0" y="0" width="549" height="540"
-          style={{ opacity: 0.25 }}
-        />
-        {Object.entries(LABELS).map(([name, { x, y }]) => {
-          const stat = statMap[name];
-          if (!stat) return null;
-          const color = boroughScoreColor(stat.avg_score);
-          const isHL = name === highlight;
-          const abbr: Record<string,string> = { Manhattan:"MN", Bronx:"BX", Brooklyn:"BK", Queens:"QN", "Staten Island":"SI" };
-          return (
-            <g key={name}>
-              <circle cx={x} cy={y} r={isHL ? 22 : 18}
-                fill={color} fillOpacity={isHL ? 0.95 : 0.75}
-                stroke="white" strokeWidth={isHL ? 2 : 1} />
-              <text x={x} y={y - 4} textAnchor="middle" fontSize={isHL ? 9 : 8}
-                fontFamily="monospace" fill="white" fontWeight="700">{abbr[name]}</text>
-              <text x={x} y={y + 7} textAnchor="middle" fontSize={isHL ? 8 : 7}
-                fontFamily="monospace" fill="white">{stat.avg_score.toFixed(1)}</text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
+    <svg viewBox="0 0 500 380" className="rp-borough-map-svg" xmlns="http://www.w3.org/2000/svg">
+      {Object.entries(PATHS).map(([name, { d, lx, ly }]) => {
+        const stat = statMap[name];
+        const fillColor = stat ? boroughScoreColor(stat.avg_score) : "#e2e8f0";
+        const isHL = name === highlight;
+        const abbr: Record<string,string> = { Manhattan:"MN", Bronx:"BX", Brooklyn:"BK", Queens:"QN", "Staten Island":"SI" };
+        return (
+          <g key={name}>
+            <path d={d} fill={fillColor} fillOpacity={isHL ? 1 : 0.8}
+              stroke="white" strokeWidth={isHL ? 2.5 : 1.5} strokeLinejoin="round" />
+            <text x={lx} y={ly - 6} textAnchor="middle" fontSize={9}
+              fontFamily="monospace" fill="white" fontWeight="700" pointerEvents="none">
+              {abbr[name]}
+            </text>
+            {stat && (
+              <text x={lx} y={ly + 5} textAnchor="middle" fontSize={8}
+                fontFamily="monospace" fill="white" pointerEvents="none">
+                {stat.avg_score.toFixed(1)}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 
@@ -798,13 +810,13 @@ function ClsBadge({ cls, source }: { cls?: string; source: string }) {
   if (source === "HPD" && cls) {
     const bg = cls === "C" ? "#fde8e4" : cls === "B" ? "#fef3e2" : "#f0f4f8";
     const col = cls === "C" ? "#c4533a" : cls === "B" ? "#d97b3a" : "#7a8fa6";
-    return <span style={{ display:"inline-block", padding:"1px 6px", borderRadius:4, fontSize:10, fontWeight:700, fontFamily:"var(--font-mono)", background:bg, color:col }}>Class {cls}</span>;
+    return <span style={{ display:"inline-block", padding:"1px 6px", borderRadius:4, fontSize:10, fontWeight:700, fontFamily:"'DM Mono', monospace", background:bg, color:col }}>Class {cls}</span>;
   }
   const labels: Record<string,string> = { DOB:"DOB", ECB:"ECB", OATH:"OATH", DSNY:"DSNY", DOHMH:"HLTH", NYPD:"NYPD" };
   const bgs: Record<string,string> = { DOB:"#eff6ff", ECB:"#fef3c7", OATH:"#fef3c7", DSNY:"#ecfdf5", DOHMH:"#fef3c7", NYPD:"#eff6ff" };
   const cols: Record<string,string> = { DOB:"#1d4ed8", ECB:"#b45309", OATH:"#b45309", DSNY:"#059669", DOHMH:"#b45309", NYPD:"#1d4ed8" };
   const lbl = labels[source] || source;
-  return <span style={{ display:"inline-block", padding:"1px 6px", borderRadius:4, fontSize:10, fontWeight:700, fontFamily:"var(--font-mono)", background:bgs[source]||"#f0f4f8", color:cols[source]||"#7a8fa6" }}>{lbl}</span>;
+  return <span style={{ display:"inline-block", padding:"1px 6px", borderRadius:4, fontSize:10, fontWeight:700, fontFamily:"'DM Mono', monospace", background:bgs[source]||"#f0f4f8", color:cols[source]||"#7a8fa6" }}>{lbl}</span>;
 }
 
 function ViolRow({ v }: { v: UnifiedViolation }) {
@@ -813,17 +825,17 @@ function ViolRow({ v }: { v: UnifiedViolation }) {
     <tr className="rp-vrow" onClick={() => setOpen(o => !o)} style={{ cursor:"pointer" }}>
       <td className="rp-vtd rp-vtd-badge"><ClsBadge cls={v.cls} source={v.source} /></td>
       <td className="rp-vtd rp-vtd-desc">
-        <div style={{ fontWeight:500, fontSize:13, color:"var(--navy)", lineHeight:1.4, fontFamily:"var(--font-sans)" }}>
-          {v.id && <span style={{ fontFamily:"var(--font-mono)", fontSize:10, color:"var(--slate)", marginRight:6 }}>#{v.id}</span>}
+        <div style={{ fontWeight:500, fontSize:13, color:"var(--navy)", lineHeight:1.4, fontFamily:"'Inter', -apple-system, sans-serif" }}>
+          {v.id && <span style={{ fontFamily:"'DM Mono', monospace", fontSize:10, color:"var(--slate)", marginRight:6 }}>#{v.id}</span>}
           {(v.desc || "No description").slice(0, open ? 9999 : 160)}{!open && (v.desc||"").length > 160 ? "…" : ""}
         </div>
         {v.balance && v.balance > 0 && (
-          <div style={{ fontSize:11, color:"#b45309", fontWeight:600, marginTop:2, fontFamily:"var(--font-mono)" }}>
+          <div style={{ fontSize:11, color:"#b45309", fontWeight:600, marginTop:2, fontFamily:"'DM Mono', monospace" }}>
             Balance: ${v.balance.toLocaleString()}
           </div>
         )}
       </td>
-      <td className="rp-vtd rp-vtd-date" style={{ fontFamily:"var(--font-mono)", fontSize:11, color:"var(--slate)", whiteSpace:"nowrap" }}>
+      <td className="rp-vtd rp-vtd-date" style={{ fontFamily:"'DM Mono', monospace", fontSize:11, color:"var(--slate)", whiteSpace:"nowrap" }}>
         {fmtDate(v.date)}
       </td>
     </tr>
@@ -914,7 +926,7 @@ function OpenViolationTabs(_props: { violations: Violation[]; elevators: any[]; 
 
   if (total === 0) {
     return (
-      <div style={{ padding:"32px 20px", textAlign:"center", fontFamily:"var(--font-sans)", fontSize:13, color:"var(--slate)" }}>
+      <div style={{ padding:"32px 20px", textAlign:"center", fontFamily:"'Inter', -apple-system, sans-serif", fontSize:13, color:"var(--slate)" }}>
         No open violations or outstanding items on record
       </div>
     );
@@ -974,15 +986,15 @@ function OpenViolationTabs(_props: { violations: Violation[]; elevators: any[]; 
               {inspItems.slice(0,page).map((item,i) => (
                 <tr key={i} className="rp-vrow">
                   <td className="rp-vtd rp-vtd-badge">
-                    <span style={{ display:"inline-block", padding:"1px 6px", borderRadius:4, fontSize:10, fontWeight:700, fontFamily:"var(--font-mono)", background:"#fef2f2", color:"#c4533a" }}>
+                    <span style={{ display:"inline-block", padding:"1px 6px", borderRadius:4, fontSize:10, fontWeight:700, fontFamily:"'DM Mono', monospace", background:"#fef2f2", color:"#c4533a" }}>
                       {item.type.includes("Elevator") ? "ELEV" : "BOILER"}
                     </span>
                   </td>
                   <td className="rp-vtd rp-vtd-desc">
                     <div style={{ fontWeight:500, fontSize:13, color:"var(--navy)" }}>{item.desc}</div>
-                    <div style={{ fontSize:11, color:"#c4533a", fontWeight:600, fontFamily:"var(--font-mono)", marginTop:2 }}>{item.status}</div>
+                    <div style={{ fontSize:11, color:"#c4533a", fontWeight:600, fontFamily:"'DM Mono', monospace", marginTop:2 }}>{item.status}</div>
                   </td>
-                  <td className="rp-vtd rp-vtd-date" style={{ fontFamily:"var(--font-mono)", fontSize:11, color:"var(--slate)", whiteSpace:"nowrap" }}>
+                  <td className="rp-vtd rp-vtd-date" style={{ fontFamily:"'DM Mono', monospace", fontSize:11, color:"var(--slate)", whiteSpace:"nowrap" }}>
                     {fmtDate(item.date)}
                   </td>
                 </tr>
@@ -1001,7 +1013,7 @@ function OpenViolationTabs(_props: { violations: Violation[]; elevators: any[]; 
               {tcoItems.map((item,i) => (
                 <tr key={i} className="rp-vrow">
                   <td className="rp-vtd rp-vtd-badge">
-                    <span style={{ display:"inline-block", padding:"1px 6px", borderRadius:4, fontSize:10, fontWeight:700, fontFamily:"var(--font-mono)", background: item.expired ? "#fef2f2" : "#fef3c7", color: item.expired ? "#c4533a" : "#b45309" }}>
+                    <span style={{ display:"inline-block", padding:"1px 6px", borderRadius:4, fontSize:10, fontWeight:700, fontFamily:"'DM Mono', monospace", background: item.expired ? "#fef2f2" : "#fef3c7", color: item.expired ? "#c4533a" : "#b45309" }}>
                       {item.expired ? "EXPIRED" : "TEMP CO"}
                     </span>
                   </td>
@@ -1009,11 +1021,11 @@ function OpenViolationTabs(_props: { violations: Violation[]; elevators: any[]; 
                     <div style={{ fontWeight:500, fontSize:13, color:"var(--navy)" }}>
                       {item.expired ? "TCO Expired" : "Temporary Certificate of Occupancy"}
                     </div>
-                    {item.expiry && <div style={{ fontSize:11, color: item.expired ? "#c4533a" : "#b45309", fontWeight:600, fontFamily:"var(--font-mono)", marginTop:2 }}>
+                    {item.expiry && <div style={{ fontSize:11, color: item.expired ? "#c4533a" : "#b45309", fontWeight:600, fontFamily:"'DM Mono', monospace", marginTop:2 }}>
                       {item.expired ? "Expired" : "Expires"}: {item.expiry}
                     </div>}
                   </td>
-                  <td className="rp-vtd rp-vtd-date" style={{ fontFamily:"var(--font-mono)", fontSize:11, color:"var(--slate)", whiteSpace:"nowrap" }}>
+                  <td className="rp-vtd rp-vtd-date" style={{ fontFamily:"'DM Mono', monospace", fontSize:11, color:"var(--slate)", whiteSpace:"nowrap" }}>
                     {fmtDate(item.date)}
                   </td>
                 </tr>
@@ -1573,22 +1585,22 @@ export default function ReportPage(_props: ReportPageProps) {
                   : null;
                 return (
                   <div style={{marginTop:16, display:"flex", flexDirection:"column", gap:6}}>
-                    <div style={{fontFamily:"var(--font-mono)", fontSize:10, letterSpacing:"0.1em", textTransform:"uppercase", color:"var(--slate)", marginBottom:2}}>Compared to</div>
-                    <div style={{fontSize:13, color:"rgba(255,255,255,0.85)", fontFamily:"var(--font-sans)"}}>
+                    <div style={{fontFamily:"'DM Mono', monospace", fontSize:10, letterSpacing:"0.1em", textTransform:"uppercase", color:"var(--slate)", marginBottom:2}}>Compared to</div>
+                    <div style={{fontSize:13, color:"rgba(255,255,255,0.85)", fontFamily:"'Inter', -apple-system, sans-serif"}}>
                       NYC buildings: {cmp(pct)}
                     </div>
                     {boroughName && boroughPct !== null && (
-                      <div style={{fontSize:13, color:"rgba(255,255,255,0.85)", fontFamily:"var(--font-sans)"}}>
+                      <div style={{fontSize:13, color:"rgba(255,255,255,0.85)", fontFamily:"'Inter', -apple-system, sans-serif"}}>
                         {boroughName} buildings: {cmp(boroughPct)}
                       </div>
                     )}
                     {unitCount > 0 && (
-                      <div style={{fontSize:13, color:"rgba(255,255,255,0.85)", fontFamily:"var(--font-sans)"}}>
+                      <div style={{fontSize:13, color:"rgba(255,255,255,0.85)", fontFamily:"'Inter', -apple-system, sans-serif"}}>
                         Buildings with {unitBand} units: {cmp(Math.round(Math.max(5, Math.min(95, pct + (unitCount > 100 ? -3 : unitCount > 50 ? 2 : 5)))))}
                       </div>
                     )}
                     {totalBalance > 0 && (
-                      <div style={{marginTop:4, fontSize:12, color:"var(--risk-red)", fontFamily:"var(--font-mono)", fontWeight:600}}>
+                      <div style={{marginTop:4, fontSize:12, color:"var(--risk-red)", fontFamily:"'DM Mono', monospace", fontWeight:600}}>
                         {fmtCurrency(totalBalance)} outstanding balance
                       </div>
                     )}
@@ -1663,15 +1675,15 @@ export default function ReportPage(_props: ReportPageProps) {
 
                 {/* Card 1: Inspection Frequency */}
                 <div className="rp-card" style={{ padding: "20px 20px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)" }}>Inspection Frequency</div>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)" }}>Inspection Frequency</div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 36, fontWeight: 700, lineHeight: 1,
+                    <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 36, fontWeight: 700, lineHeight: 1,
                       color: (insights.inspection_days_12m ?? 0) > 6 ? "var(--risk-red)"
                            : (insights.inspection_days_12m ?? 0) > 3 ? "var(--risk-amber)"
                            : "var(--risk-green)" }}>
                       {insights.inspection_days_12m ?? 0}
                     </span>
-                    <span style={{ fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-sans)" }}>visits / 12 mo</span>
+                    <span style={{ fontSize: 12, color: "var(--slate)", fontFamily: "'Inter', -apple-system, sans-serif" }}>visits / 12 mo</span>
                   </div>
                   {/* Comparison bars */}
                   {(() => {
@@ -1684,25 +1696,25 @@ export default function ReportPage(_props: ReportPageProps) {
                     return (
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--slate)", width: 58, flexShrink: 0 }}>This bldg</span>
+                          <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--slate)", width: 58, flexShrink: 0 }}>This bldg</span>
                           <div style={{ flex: 1, height: 7, background: "rgba(17,30,48,0.07)", borderRadius: 4, overflow: "hidden" }}>
                             <div style={{ width: `${myPct}%`, height: "100%", background: barColor, borderRadius: 4 }} />
                           </div>
-                          <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--navy)", width: 22, textAlign: "right" }}>{mine}</span>
+                          <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--navy)", width: 22, textAlign: "right" }}>{mine}</span>
                         </div>
                         {avg != null && (
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--slate)", width: 58, flexShrink: 0 }}>Peer avg</span>
+                            <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--slate)", width: 58, flexShrink: 0 }}>Peer avg</span>
                             <div style={{ flex: 1, height: 7, background: "rgba(17,30,48,0.07)", borderRadius: 4, overflow: "hidden" }}>
                               <div style={{ width: `${avgPct}%`, height: "100%", background: "var(--slate)", borderRadius: 4, opacity: 0.45 }} />
                             </div>
-                            <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--slate)", width: 22, textAlign: "right" }}>{avg.toFixed(1)}</span>
+                            <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--slate)", width: 22, textAlign: "right" }}>{avg.toFixed(1)}</span>
                           </div>
                         )}
                       </div>
                     );
                   })()}
-                  <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "var(--font-sans)", lineHeight: 1.55, flexGrow: 1 }}>
+                  <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "'Inter', -apple-system, sans-serif", lineHeight: 1.55, flexGrow: 1 }}>
                     {(() => {
                       const mine = insights.inspection_days_12m ?? 0;
                       const avg = insights.inspection_days_peer_avg;
@@ -1719,16 +1731,16 @@ export default function ReportPage(_props: ReportPageProps) {
 
                 {/* Card 2: Violation Momentum */}
                 <div className="rp-card" style={{ padding: "20px 20px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)" }}>Violation Momentum</div>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)" }}>Violation Momentum</div>
                   {/* Big number + trend */}
                   <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 36, fontWeight: 700, lineHeight: 1,
+                    <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 36, fontWeight: 700, lineHeight: 1,
                       color: insights.violations_5yr_trend === "increasing" ? "var(--risk-red)" : insights.violations_5yr_trend === "decreasing" ? "var(--risk-green)" : "var(--slate)" }}>
                       {insights.violations_5yr_total ?? 0}
                     </span>
-                    <span style={{ fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-sans)" }}>violations / 5 yr</span>
+                    <span style={{ fontSize: 12, color: "var(--slate)", fontFamily: "'Inter', -apple-system, sans-serif" }}>violations / 5 yr</span>
                     {insights.violations_5yr_trend && (
-                      <span style={{ marginLeft: "auto", fontSize: 13, fontFamily: "var(--font-mono)",
+                      <span style={{ marginLeft: "auto", fontSize: 13, fontFamily: "'DM Mono', monospace",
                         color: insights.violations_5yr_trend === "increasing" ? "var(--risk-red)" : insights.violations_5yr_trend === "decreasing" ? "var(--risk-green)" : "var(--slate)" }}>
                         {insights.violations_5yr_trend === "increasing" ? "↑ increasing" : insights.violations_5yr_trend === "decreasing" ? "↓ decreasing" : "→ stable"}
                       </span>
@@ -1764,12 +1776,12 @@ export default function ReportPage(_props: ReportPageProps) {
 
                 {/* Card 3: Hidden Risk Signals */}
                 <div className="rp-card" style={{ padding: "20px 20px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)" }}>Hidden Risk Signals</div>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)" }}>Hidden Risk Signals</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, flexGrow: 1 }}>
                     {(insights.oldest_open_violation_days ?? 0) > 365 ? (
                       <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                         <span style={{ fontSize: 14, lineHeight: 1.2, flexShrink: 0 }}>🕐</span>
-                        <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "var(--font-sans)", lineHeight: 1.5 }}>
+                        <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "'Inter', -apple-system, sans-serif", lineHeight: 1.5 }}>
                           Oldest open violation is <strong style={{ color: "var(--risk-amber)" }}>{Math.round((insights.oldest_open_violation_days ?? 0) / 365 * 10) / 10} years</strong> old
                           {(insights.long_open_count ?? 0) > 0 && <>; <strong>{insights.long_open_count}</strong> violations open 3+ years</>}.
                         </div>
@@ -1777,33 +1789,33 @@ export default function ReportPage(_props: ReportPageProps) {
                     ) : (
                       <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                         <span style={{ fontSize: 14, lineHeight: 1.2 }}>✅</span>
-                        <div style={{ fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-sans)", lineHeight: 1.5 }}>No violations open longer than 1 year.</div>
+                        <div style={{ fontSize: 12, color: "var(--slate)", fontFamily: "'Inter', -apple-system, sans-serif", lineHeight: 1.5 }}>No violations open longer than 1 year.</div>
                       </div>
                     )}
                     {(insights.multi_agency_count ?? 0) > 2 ? (
                       <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                         <span style={{ fontSize: 14, lineHeight: 1.2, flexShrink: 0 }}>🏛️</span>
-                        <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "var(--font-sans)", lineHeight: 1.5 }}>
+                        <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "'Inter', -apple-system, sans-serif", lineHeight: 1.5 }}>
                           <strong style={{ color: "var(--risk-amber)" }}>{insights.multi_agency_count}</strong> months with violations from multiple agencies simultaneously — suggests systemic issues.
                         </div>
                       </div>
                     ) : (
                       <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                         <span style={{ fontSize: 14, lineHeight: 1.2 }}>✅</span>
-                        <div style={{ fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-sans)", lineHeight: 1.5 }}>No multi-agency enforcement patterns detected.</div>
+                        <div style={{ fontSize: 12, color: "var(--slate)", fontFamily: "'Inter', -apple-system, sans-serif", lineHeight: 1.5 }}>No multi-agency enforcement patterns detected.</div>
                       </div>
                     )}
                     {(insights.inspection_days_12m ?? 0) > 3 ? (
                       <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                         <span style={{ fontSize: 14, lineHeight: 1.2, flexShrink: 0 }}>🔍</span>
-                        <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "var(--font-sans)", lineHeight: 1.5 }}>
+                        <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "'Inter', -apple-system, sans-serif", lineHeight: 1.5 }}>
                           <strong style={{ color: (insights.inspection_days_12m ?? 0) > 6 ? "var(--risk-red)" : "var(--risk-amber)" }}>{insights.inspection_days_12m}×</strong> inspection visits — {(insights.inspection_days_12m ?? 0) > 6 ? "high frequency often signals unresolved repeat violations." : "above average for this building type."}
                         </div>
                       </div>
                     ) : (
                       <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                         <span style={{ fontSize: 14, lineHeight: 1.2 }}>✅</span>
-                        <div style={{ fontSize: 12, color: "var(--slate)", fontFamily: "var(--font-sans)", lineHeight: 1.5 }}>Inspection frequency is normal for this building type.</div>
+                        <div style={{ fontSize: 12, color: "var(--slate)", fontFamily: "'Inter', -apple-system, sans-serif", lineHeight: 1.5 }}>Inspection frequency is normal for this building type.</div>
                       </div>
                     )}
                   </div>
@@ -1821,7 +1833,7 @@ export default function ReportPage(_props: ReportPageProps) {
             <div className="rp-section">
               <div className="rp-section-title">
                 Risk by Borough
-                <span style={{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                <span style={{ fontFamily: "'Inter', -apple-system, sans-serif", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
                   Average risk score
                 </span>
               </div>
@@ -1883,7 +1895,7 @@ export default function ReportPage(_props: ReportPageProps) {
                   <PeerBar key={row.label} {...row} />
                 ))}
               </div>
-              <div style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--slate)" }}>
+              <div style={{ marginTop: 8, fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--slate)" }}>
                 Gray marker = NYC building average. Bar = this building.
               </div>
             </div>
@@ -1894,7 +1906,7 @@ export default function ReportPage(_props: ReportPageProps) {
             marginTop: 48,
             paddingTop: 24,
             borderTop: "1px solid var(--navy-10)",
-            fontFamily: "var(--font-mono)",
+            fontFamily: "'DM Mono', monospace",
             fontSize: 11,
             color: "var(--slate)",
             lineHeight: 1.6,
