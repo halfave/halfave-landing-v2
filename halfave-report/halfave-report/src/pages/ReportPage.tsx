@@ -1060,7 +1060,7 @@ export default function ReportPage(_props: ReportPageProps) {
           const bal = parseFloat(v.balance_due ?? "NaN");
           return !(cert !== "NO COMPLIANCE RECORDED" && !isNaN(bal) && bal === 0);
         }) : [];
-        const dobOpen = Array.isArray(dobViolRaw) ? dobViolRaw.filter((v: any) => (v.violation_category || "").trim() === "V-DOB VIOLATION - ACTIVE") : [];
+        const dobOpen = Array.isArray(dobViolRaw) ? dobViolRaw.filter((v: any) => { const cat = (v.violation_category || "").trim(); return cat === "V-DOB VIOLATION - ACTIVE" || (!cat.includes("*") && cat !== ""); }) : [];
 
         let pts = classC.length * 4 + classB.length * 2 + (openHpd.length - classC.length - classB.length) * 0.5
           + dobOpen.length * 2 + ecbOpen.length * 2;
@@ -1746,7 +1746,15 @@ Promise.all([
           )}
 
           {/* ── CONTEXT TABLES (dark navy background) ── */}
-          <div style={{ background: "#111e30", borderRadius: 16, padding: "24px", margin: "0 0 32px" }}>
+          <div style={{ margin: "0 0 32px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+              <div style={{ flex: 1, height: 1, background: "var(--navy-10)" }} />
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)", whiteSpace: "nowrap" }}>
+                NYC averages — not specific to this building
+              </div>
+              <div style={{ flex: 1, height: 1, background: "var(--navy-10)" }} />
+            </div>
+            <div style={{ background: "#111e30", borderRadius: 16, padding: "24px" }}>
             <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 16 }}>
               NYC context — all buildings
             </div>
@@ -1815,6 +1823,7 @@ Promise.all([
 
               </div>
             )}
+            </div>
           </div>
 
           {/* ── FOOTER ── */}
