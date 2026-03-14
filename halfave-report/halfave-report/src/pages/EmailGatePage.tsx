@@ -8,7 +8,6 @@ interface Props {
   onBack: () => void
 }
 
-const LOGO = 'https://pub-8148357eae8a439fa3a35df4c60df703.r2.dev/site/logo/Asset%201%401x%20(2).png'
 
 const MOCK_VIOLATIONS = [
   { cls: 'C', title: 'Elevator — no annual inspection certificate', meta: 'NOV-123845 · Issued 01/14/2025 · ECB', open: true },
@@ -22,7 +21,6 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [logoErr, setLogoErr] = useState(false)
   const [sent, setSent] = useState(false)
 
   const bucketColor = RISK_COLORS[building.risk_bucket ?? ''] ?? '#7a8fa6'
