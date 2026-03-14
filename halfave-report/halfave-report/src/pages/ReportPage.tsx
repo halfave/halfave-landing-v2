@@ -895,68 +895,190 @@ function ViolationRow({ v, expanded, onToggle }: {
 // ─── Violation Tabs ────────────────────────────────────────────────────────────
 type SortKey = "severity" | "issue_date" | "is_open" | "violation_type";
 
-type SourceTab = "HPD" | "DOB" | "ECB" | "OATH" | "DSNY" | "DOHMH" | "NYPD";
-const ALL_TABS: SourceTab[] = ["HPD", "DOB", "ECB", "OATH", "DSNY", "DOHMH", "NYPD"];
-const TAB_LABELS: Record<SourceTab, string> = {
-  HPD: "HPD", DOB: "DOB", ECB: "ECB", OATH: "OATH", DSNY: "Sanitation", DOHMH: "Health", NYPD: "NYPD",
+// ─── Violation + Inspection Tabs ─────────────────────────────────────────────
+type VTab = "HPD" | "DOB" | "ECB_OATH" | "Inspections" | "TCO";
+const VTAB_LABELS: Record<VTab, string> = {
+  HPD: "HPD", DOB: "DOB", ECB_OATH: "ECB / OATH", Inspections: "Inspections", TCO: "TCO",
 };
 
-function ViolationTabs({ violations }: { violations: Violation[] }) {
-  // Only show open or non-zero balance_due
-  const active = violations.filter((v) => v.is_open || (v.balance_due != null && v.balance_due !== 0));
+function fmtDate(d: string | null | undefined): string {
+  if (!d) return "—";
+  try {
+    if (/^\d{8}$/.test(d)) d = `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
+    const dt = new Date(d);
+    return isNaN(dt.getTime()) ? d.slice(0,10) : dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch { return d.slice(0,10); }
+}
 
-  const bySource: Record<SourceTab, Violation[]> = {
-    HPD: [], DOB: [], ECB: [], OATH: [], DSNY: [], DOHMH: [], NYPD: [],
-  };
-  for (const v of active) {
-    const s = (v.source || v.agency) as SourceTab;
-    if (s in bySource) bySource[s].push(v);
+interface UnifiedViolation {
+  id: string;
+  source: string;
+  cls?: string;
+  desc: string;
+  date: string;
+  balance?: number | null;
+  link?: string;
+}
+
+function toUV(arr: any[], source: string, open: boolean): UnifiedViolation[] {
+  if (!open) return [];
+  return (arr || []).map((v: any) => ({
+    id: v.id || "",
+    source,
+    cls: v.cls || "",
+    desc: v.desc || v.description || "",
+    date: v.date || v.issue_date || v.violation_date || "",
+    balance: (v.penalty != null && Number(v.penalty) !== 0) ? Number(v.penalty) : null,
+    link: v.link || undefined,
+  }));
+}
+
+function sortByDate(a: UnifiedViolation, b: UnifiedViolation) {
+  return (b.date || "").localeCompare(a.date || "");
+}
+
+interface InspectionItem {
+  id: string;
+  type: string;
+  desc: string;
+  date: string;
+  status: string;
+}
+
+interface TcoItem {
+  type: string;
+  date: string;
+  expiry: string;
+  expired: boolean;
+}
+
+function ClsBadge({ cls, source }: { cls?: string; source: string }) {
+  if (source === "HPD" && cls) {
+    const bg = cls === "C" ? "#fde8e4" : cls === "B" ? "#fef3e2" : "#f0f4f8";
+    const col = cls === "C" ? "#c4533a" : cls === "B" ? "#d97b3a" : "#7a8fa6";
+    return <span style={{ display:"inline-block", padding:"1px 6px", borderRadius:4, fontSize:10, fontWeight:700, fontFamily:"var(--font-mono)", background:bg, color:col }}>Class {cls}</span>;
   }
+  const labels: Record<string,string> = { DOB:"DOB", ECB:"ECB", OATH:"OATH", DSNY:"DSNY", DOHMH:"HLTH", NYPD:"NYPD" };
+  const bgs: Record<string,string> = { DOB:"#eff6ff", ECB:"#fef3c7", OATH:"#fef3c7", DSNY:"#ecfdf5", DOHMH:"#fef3c7", NYPD:"#eff6ff" };
+  const cols: Record<string,string> = { DOB:"#1d4ed8", ECB:"#b45309", OATH:"#b45309", DSNY:"#059669", DOHMH:"#b45309", NYPD:"#1d4ed8" };
+  const lbl = labels[source] || source;
+  return <span style={{ display:"inline-block", padding:"1px 6px", borderRadius:4, fontSize:10, fontWeight:700, fontFamily:"var(--font-mono)", background:bgs[source]||"#f0f4f8", color:cols[source]||"#7a8fa6" }}>{lbl}</span>;
+}
 
-  // Only show tabs with data; default to first with data
-  const activeTabs = ALL_TABS.filter((t) => bySource[t].length > 0);
-  const [tab, setTab] = useState<SourceTab>(activeTabs[0] ?? "HPD");
-  const [sortKey, setSortKey] = useState<SortKey>("severity");
-  const [sortAsc, setSortAsc] = useState(false);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [page, setPage] = useState(20);
-
-  const current = bySource[tab] ?? [];
-
-  const sorted = [...current].sort((a, b) => {
-    let cmp = 0;
-    if (sortKey === "severity") cmp = severityWeight(b.severity) - severityWeight(a.severity);
-    else if (sortKey === "issue_date") cmp = (b.issue_date ?? "").localeCompare(a.issue_date ?? "");
-    else if (sortKey === "is_open") cmp = (b.is_open ? 1 : 0) - (a.is_open ? 1 : 0);
-    else if (sortKey === "violation_type") cmp = (a.violation_type ?? "").localeCompare(b.violation_type ?? "");
-    return sortAsc ? -cmp : cmp;
-  });
-
-  function toggleSort(key: SortKey) {
-    if (sortKey === key) setSortAsc(!sortAsc);
-    else { setSortKey(key); setSortAsc(false); }
-    setPage(20);
-  }
-
-  function toggleExpand(id: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
-
-  const th = (label: string, key: SortKey) => (
-    <th className={sortKey === key ? "sorted" : ""} onClick={() => toggleSort(key)}>
-      {label}
-      <span className="sort-arrow">{sortKey === key ? (sortAsc ? "↑" : "↓") : "↕"}</span>
-    </th>
+function ViolRow({ v }: { v: UnifiedViolation }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <tr className="rp-vrow" onClick={() => setOpen(o => !o)} style={{ cursor:"pointer" }}>
+      <td className="rp-vtd rp-vtd-badge"><ClsBadge cls={v.cls} source={v.source} /></td>
+      <td className="rp-vtd rp-vtd-desc">
+        <div style={{ fontWeight:500, fontSize:13, color:"var(--navy)", lineHeight:1.4 }}>
+          {v.id && <span style={{ fontFamily:"var(--font-mono)", fontSize:10, color:"var(--slate)", marginRight:6 }}>#{v.id}</span>}
+          {(v.desc || "No description").slice(0, open ? 9999 : 160)}{!open && (v.desc||"").length > 160 ? "…" : ""}
+        </div>
+        {v.balance && v.balance > 0 && (
+          <div style={{ fontSize:11, color:"#b45309", fontWeight:600, marginTop:2, fontFamily:"var(--font-mono)" }}>
+            Balance: ${v.balance.toLocaleString()}
+          </div>
+        )}
+      </td>
+      <td className="rp-vtd rp-vtd-date" style={{ fontFamily:"var(--font-mono)", fontSize:11, color:"var(--slate)", whiteSpace:"nowrap" }}>
+        {fmtDate(v.date)}
+      </td>
+    </tr>
   );
+}
 
-  if (active.length === 0) {
+function OpenViolationTabs({ violations, elevators, boilers, co }: {
+  violations: Violation[];
+  elevators: any[];
+  boilers: any[];
+  co: any | null;
+}) {
+  const w = (window as any).__halfaveBldg || {};
+  const vw = w.violations || {};
+
+  // Build per-tab items from window raw data (richer than the Violation[] which lost source detail)
+  const hpdItems: UnifiedViolation[] = [
+    ...toUV(vw.hpd?.open || [], "HPD", true),
+  ].sort(sortByDate);
+
+  const dobItems: UnifiedViolation[] = [
+    ...toUV(vw.dob?.open || [], "DOB", true),
+  ].sort(sortByDate);
+
+  const ecbOathItems: UnifiedViolation[] = [
+    ...toUV(vw.ecb?.open || [], "ECB", true),
+    ...toUV((vw.oath || []).filter((v: any) => {
+      const d = (v.disposition || "").toUpperCase();
+      return !d.includes("DISMISS") && d !== "PAID IN FULL" && d !== "PAID";
+    }), "OATH", true),
+    ...toUV((vw.sanitation || []).filter((v: any) => parseFloat(v.balance_due ?? "0") > 0), "DSNY", true),
+    ...toUV((vw.dohmh || []).filter((v: any) => parseFloat(v.balance_due ?? "0") > 0), "DOHMH", true),
+    ...toUV((vw.nypd || []).filter((v: any) => parseFloat(v.balance_due ?? "0") > 0), "NYPD", true),
+  ].sort(sortByDate);
+
+  // Inspections: elevators with overdue CAT1 or PVT, boilers not accepted
+  const cutoff = new Date("2025-01-01");
+  const inspItems: InspectionItem[] = [];
+  const allElev = w.elevators || [];
+  for (const d of allElev) {
+    const id = (d.device_number || d.devicenumber || "—").toString();
+    const catRaw = d.cat1_latest_report_filed || d.cat1_latest_report_filed_date || "";
+    const pvtRaw = d.periodic_latest_inspection || d.periodic_latest_inspection_date || "";
+    if (catRaw && new Date(catRaw) < cutoff) {
+      inspItems.push({ id, type: "Elevator CAT1", desc: `Device #${id} — CAT1 inspection overdue`, date: catRaw, status: "Overdue" });
+    }
+    if (pvtRaw && new Date(pvtRaw) < cutoff) {
+      inspItems.push({ id: id + "-pvt", type: "Elevator PVT", desc: `Device #${id} — Periodic inspection overdue`, date: pvtRaw, status: "Overdue" });
+    }
+  }
+  const allBoilers = w.boilers || [];
+  for (const d of allBoilers) {
+    if ((d.report_status || "").toLowerCase() !== "accepted") {
+      const id = (d.boiler_id || d.boilerid || "—").toString();
+      inspItems.push({ id, type: "Boiler", desc: `Boiler #${id} — inspection not accepted`, date: d.inspection_date || "", status: d.report_status || "Not accepted" });
+    }
+  }
+  inspItems.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+  // TCO
+  const tcoItems: TcoItem[] = [];
+  const coData = w.co;
+  if (coData) {
+    const coType = (coData.c_of_o_filing_type || coData.certtype || coData.co_type || "").toLowerCase();
+    const isFinal = coType.includes("final");
+    if (!isFinal) {
+      const issuedRaw = coData.c_of_o_issuance_date || coData.co_issue_date || coData.issue_date || "";
+      let expiryStr = "";
+      let expired = false;
+      if (issuedRaw) {
+        const expDate = new Date(issuedRaw);
+        expDate.setMonth(expDate.getMonth() + 3);
+        expiryStr = fmtDate(expDate.toISOString());
+        expired = new Date() > expDate;
+      }
+      tcoItems.push({ type: coType || "Temporary CO", date: issuedRaw, expiry: expiryStr, expired });
+    }
+  }
+
+  const counts: Record<VTab, number> = {
+    HPD: hpdItems.length,
+    DOB: dobItems.length,
+    ECB_OATH: ecbOathItems.length,
+    Inspections: inspItems.length,
+    TCO: tcoItems.length,
+  };
+
+  const activeTabs = (["HPD","DOB","ECB_OATH","Inspections","TCO"] as VTab[]).filter(t => counts[t] > 0);
+  const [tab, setTab] = useState<VTab>(activeTabs[0] ?? "HPD");
+  const [page, setPage] = useState(25);
+
+  const total = hpdItems.length + dobItems.length + ecbOathItems.length + inspItems.length + tcoItems.length;
+
+  if (total === 0) {
     return (
-      <div style={{ padding: "32px 20px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--slate)" }}>
-        No open violations or outstanding balances on record
+      <div style={{ padding:"32px 20px", textAlign:"center", fontFamily:"var(--font-mono)", fontSize:13, color:"var(--slate)" }}>
+        No open violations or outstanding items on record
       </div>
     );
   }
@@ -964,58 +1086,113 @@ function ViolationTabs({ violations }: { violations: Violation[] }) {
   return (
     <div>
       <div className="rp-tabs-nav">
-        {activeTabs.map((t) => (
-          <button
-            key={t}
-            className={`rp-tab-btn ${tab === t ? "active" : ""}`}
-            onClick={() => { setTab(t); setPage(20); }}
-          >
-            {TAB_LABELS[t]}
-            <span className="rp-tab-count">{bySource[t].length}</span>
+        {activeTabs.map(t => (
+          <button key={t} className={`rp-tab-btn ${tab === t ? "active" : ""}`}
+            onClick={() => { setTab(t); setPage(25); }}>
+            {VTAB_LABELS[t]}
+            <span className="rp-tab-count">{counts[t]}</span>
           </button>
         ))}
       </div>
 
-      {current.length === 0 ? (
-        <div style={{ padding: "32px 20px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--slate)" }}>
-          No open {TAB_LABELS[tab]} violations on record
-        </div>
-      ) : (
-        <>
-          <div className="rp-vtable-wrap">
-            <table className="rp-vtable">
-              <thead>
-                <tr>
-                  {th("Severity", "severity")}
-                  {th("Type / Description", "violation_type")}
-                  {th("Status", "is_open")}
-                  {th("Issued", "issue_date")}
-                  <th></th>
+      <div className="rp-vtable-wrap">
+        {tab === "HPD" && (
+          <table className="rp-vtable">
+            <thead><tr>
+              <th style={{width:70}}>Class</th>
+              <th>Description</th>
+              <th style={{width:100}}>Issued</th>
+            </tr></thead>
+            <tbody>{hpdItems.slice(0,page).map((v,i) => <ViolRow key={i} v={v} />)}</tbody>
+          </table>
+        )}
+        {tab === "DOB" && (
+          <table className="rp-vtable">
+            <thead><tr>
+              <th style={{width:70}}>Source</th>
+              <th>Description</th>
+              <th style={{width:100}}>Issued</th>
+            </tr></thead>
+            <tbody>{dobItems.slice(0,page).map((v,i) => <ViolRow key={i} v={v} />)}</tbody>
+          </table>
+        )}
+        {tab === "ECB_OATH" && (
+          <table className="rp-vtable">
+            <thead><tr>
+              <th style={{width:70}}>Source</th>
+              <th>Description</th>
+              <th style={{width:100}}>Issued</th>
+            </tr></thead>
+            <tbody>{ecbOathItems.slice(0,page).map((v,i) => <ViolRow key={i} v={v} />)}</tbody>
+          </table>
+        )}
+        {tab === "Inspections" && (
+          <table className="rp-vtable">
+            <thead><tr>
+              <th style={{width:110}}>Type</th>
+              <th>Description</th>
+              <th style={{width:100}}>Last Inspection</th>
+            </tr></thead>
+            <tbody>
+              {inspItems.slice(0,page).map((item,i) => (
+                <tr key={i} className="rp-vrow">
+                  <td className="rp-vtd rp-vtd-badge">
+                    <span style={{ display:"inline-block", padding:"1px 6px", borderRadius:4, fontSize:10, fontWeight:700, fontFamily:"var(--font-mono)", background:"#fef2f2", color:"#c4533a" }}>
+                      {item.type.includes("Elevator") ? "ELEV" : "BOILER"}
+                    </span>
+                  </td>
+                  <td className="rp-vtd rp-vtd-desc">
+                    <div style={{ fontWeight:500, fontSize:13, color:"var(--navy)" }}>{item.desc}</div>
+                    <div style={{ fontSize:11, color:"#c4533a", fontWeight:600, fontFamily:"var(--font-mono)", marginTop:2 }}>{item.status}</div>
+                  </td>
+                  <td className="rp-vtd rp-vtd-date" style={{ fontFamily:"var(--font-mono)", fontSize:11, color:"var(--slate)", whiteSpace:"nowrap" }}>
+                    {fmtDate(item.date)}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {sorted.slice(0, page).map((v) => (
-                  <ViolationRow
-                    key={v.id}
-                    v={v}
-                    expanded={expanded.has(v.id)}
-                    onToggle={() => toggleExpand(v.id)}
-                  />
-                ))}
-              </tbody>
-            </table>
-            {sorted.length > page && (
-              <button className="rp-load-more" onClick={() => setPage((p) => p + 20)}>
-                Show more ({sorted.length - page} remaining)
-              </button>
-            )}
-          </div>
-        </>
-      )}
+              ))}
+            </tbody>
+          </table>
+        )}
+        {tab === "TCO" && (
+          <table className="rp-vtable">
+            <thead><tr>
+              <th style={{width:110}}>Type</th>
+              <th>Status</th>
+              <th style={{width:100}}>Issued</th>
+            </tr></thead>
+            <tbody>
+              {tcoItems.map((item,i) => (
+                <tr key={i} className="rp-vrow">
+                  <td className="rp-vtd rp-vtd-badge">
+                    <span style={{ display:"inline-block", padding:"1px 6px", borderRadius:4, fontSize:10, fontWeight:700, fontFamily:"var(--font-mono)", background: item.expired ? "#fef2f2" : "#fef3c7", color: item.expired ? "#c4533a" : "#b45309" }}>
+                      {item.expired ? "EXPIRED" : "TEMP CO"}
+                    </span>
+                  </td>
+                  <td className="rp-vtd rp-vtd-desc">
+                    <div style={{ fontWeight:500, fontSize:13, color:"var(--navy)" }}>
+                      {item.expired ? "TCO Expired" : "Temporary Certificate of Occupancy"}
+                    </div>
+                    {item.expiry && <div style={{ fontSize:11, color: item.expired ? "#c4533a" : "#b45309", fontWeight:600, fontFamily:"var(--font-mono)", marginTop:2 }}>
+                      {item.expired ? "Expired" : "Expires"}: {item.expiry}
+                    </div>}
+                  </td>
+                  <td className="rp-vtd rp-vtd-date" style={{ fontFamily:"var(--font-mono)", fontSize:11, color:"var(--slate)", whiteSpace:"nowrap" }}>
+                    {fmtDate(item.date)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {(tab === "HPD" ? hpdItems : tab === "DOB" ? dobItems : tab === "ECB_OATH" ? ecbOathItems : tab === "Inspections" ? inspItems : tcoItems).length > page && (
+          <button className="rp-load-more" onClick={() => setPage(p => p + 25)}>
+            Show more ({(tab === "HPD" ? hpdItems : tab === "DOB" ? dobItems : tab === "ECB_OATH" ? ecbOathItems : tab === "Inspections" ? inspItems : tcoItems).length - page} remaining)
+          </button>
+        )}
+      </div>
     </div>
   );
 }
-
 // ─── Peer Bar ─────────────────────────────────────────────────────────────────
 function PeerBar({
   label,
@@ -1328,10 +1505,7 @@ export default function ReportPage(_props: ReportPageProps) {
   if (error || !building) {
     return (
       <>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
-      <style>{CSS}</style>
+        <style>{CSS}</style>
         <div className="rp-root">
           <div className="rp-loading">
             <span style={{ color: "var(--risk-red)" }}>⚠ {error || "Report unavailable"}</span>
@@ -1508,31 +1682,16 @@ export default function ReportPage(_props: ReportPageProps) {
             </div>
           )}
 
-          {/* ── RISK DRIVERS ── */}
-          {drivers.length > 0 && (
-            <div className="rp-section">
-              <div className="rp-section-title">Top Risk Drivers</div>
-              <div className="rp-card">
-                <div className="rp-drivers">
-                  {drivers.map((d, i) => {
-                    const meta = driverMeta(d);
-                    return (
-                      <div className="rp-driver" key={i}>
-                        <span className="rp-driver-idx">{i + 1}</span>
-                        <div
-                          className="rp-driver-icon"
-                          style={{ background: meta.bg }}
-                        >
-                          {meta.icon}
-                        </div>
-                        <span className="rp-driver-text">{d}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+          {/* ── OPEN VIOLATIONS (main tabbed view) ── */}
+          <div className="rp-section">
+            <div className="rp-section-title">
+              Open Violations
+              <span style={{ fontFamily:"var(--font-mono)", fontSize:11, color:"var(--slate)", fontWeight:400, textTransform:"none", letterSpacing:0 }}>
+                open or balance due · click row to expand
+              </span>
             </div>
-          )}
+            <OpenViolationTabs violations={violations} elevators={[]} boilers={[]} co={null} />
+          </div>
 
           {/* ── BUILDING METRICS ── */}
           {features && (
@@ -1592,18 +1751,7 @@ export default function ReportPage(_props: ReportPageProps) {
           )}
 
 
-          {/* ── OPEN VIOLATIONS ── */}
-          {violations.length > 0 && (
-            <div className="rp-section">
-              <div className="rp-section-title">
-                Open Violations
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
-                  open or balance due · click row to expand
-                </span>
-              </div>
-              <ViolationTabs violations={violations} />
-            </div>
-          )}
+
 
           {/* ── RISK BY BOROUGH ── */}
           {boroughStats.length > 0 && (
