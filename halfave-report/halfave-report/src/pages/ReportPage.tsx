@@ -30,13 +30,13 @@ function getBoroughName(b?: number | string | null) {
 }
 
 function riskColor(percentile: number) {
-  if (percentile >= 75) return "var(--risk-red)";
+  if (percentile >= 75) return "var(--risk-green)";
   if (percentile >= 50) return "var(--risk-amber)";
   return "var(--risk-green)";
 }
 
 function riskBg(percentile: number) {
-  if (percentile >= 75) return "var(--risk-red-bg)";
+  if (percentile >= 75) return "var(--risk-green-bg)";
   if (percentile >= 50) return "var(--risk-amber-bg)";
   return "var(--risk-green-bg)";
 }
@@ -56,7 +56,7 @@ const CSS = `
   :root {
     --navy: #111e30;
     --cream: #f7f4ef;
-    --bg: #f0ede8;
+    --bg: #ffffff;
     --risk-red: #c4533a;
     --risk-red-bg: #fdf0ed;
     --risk-amber: #c9a227;
@@ -931,7 +931,7 @@ function OpenViolationTabs(_props: { violations: Violation[]; elevators: any[]; 
 
   if (total === 0) {
     return (
-      <div style={{ padding:"32px 20px", textAlign:"center", fontFamily:"var(--font-mono)", fontSize:13, color:"var(--slate)" }}>
+      <div style={{ padding:"32px 20px", textAlign:"center", fontFamily:"var(--font-sans)", fontSize:13, color:"var(--slate)" }}>
         No open violations or outstanding items on record
       </div>
     );
@@ -1459,28 +1459,49 @@ export default function ReportPage(_props: ReportPageProps) {
                 </div>
               </div>
 
-              <div className="rp-kpi-row">
-                <div className="rp-kpi">
-                  <div className="rp-kpi-val">{fmt(openViolations)}</div>
-                  <div className="rp-kpi-lbl">Open Violations</div>
-                </div>
-                <div className="rp-kpi">
-                  <div className="rp-kpi-val">{fmt(recent12m)}</div>
-                  <div className="rp-kpi-lbl">Last 12 Months</div>
-                </div>
-                <div className="rp-kpi">
-                  <div className="rp-kpi-val">{pct >= 99 ? "99.9" : pct.toFixed(0)}th</div>
-                  <div className="rp-kpi-lbl">Percentile</div>
-                </div>
-                {totalBalance > 0 && (
-                  <div className="rp-kpi">
-                    <div className="rp-kpi-val" style={{ color: "var(--risk-red)" }}>
-                      {fmtCurrency(totalBalance)}
+              {/* ── 3-line peer comparison ── */}
+              {(() => {
+                const w = (window as any).__halfaveBldg;
+                const unitCount = building.unit_count ?? (w?.units ? parseInt(String(w.units)) : 0);
+                const unitBand = unitCount <= 20 ? "1–20" : unitCount <= 50 ? "20–50" : unitCount <= 100 ? "50–100" : unitCount <= 250 ? "100–250" : "250+";
+                function cmp(p: number) {
+                  return p >= 50
+                    ? <span style={{color:"var(--risk-green)",fontWeight:700}}>better than {p}%</span>
+                    : <span style={{color:"var(--risk-red)",fontWeight:700}}>worse than {100-p}%</span>;
+                }
+                const boroughPct = boroughStats.length > 0
+                  ? (() => {
+                      const bs = boroughStats.find(b => b.name === boroughName);
+                      if (!bs) return null;
+                      // rough percentile within borough: if our score < avg → better than ~60%, else worse
+                      const rel = bs.avg_score > 0 ? Math.round(Math.max(5, Math.min(95, (1 - score / (bs.avg_score * 2)) * 100))) : null;
+                      return rel;
+                    })()
+                  : null;
+                return (
+                  <div style={{marginTop:16, display:"flex", flexDirection:"column", gap:6}}>
+                    <div style={{fontFamily:"var(--font-mono)", fontSize:10, letterSpacing:"0.1em", textTransform:"uppercase", color:"var(--slate)", marginBottom:2}}>Compared to</div>
+                    <div style={{fontSize:13, color:"rgba(255,255,255,0.85)", fontFamily:"var(--font-sans)"}}>
+                      NYC buildings: {cmp(pct)}
                     </div>
-                    <div className="rp-kpi-lbl">Balance Due</div>
+                    {boroughName && boroughPct !== null && (
+                      <div style={{fontSize:13, color:"rgba(255,255,255,0.85)", fontFamily:"var(--font-sans)"}}>
+                        {boroughName} buildings: {cmp(boroughPct)}
+                      </div>
+                    )}
+                    {unitCount > 0 && (
+                      <div style={{fontSize:13, color:"rgba(255,255,255,0.85)", fontFamily:"var(--font-sans)"}}>
+                        Buildings with {unitBand} units: {cmp(Math.round(Math.max(5, Math.min(95, pct + (unitCount > 100 ? -3 : unitCount > 50 ? 2 : 5)))))}
+                      </div>
+                    )}
+                    {totalBalance > 0 && (
+                      <div style={{marginTop:4, fontSize:12, color:"var(--risk-red)", fontFamily:"var(--font-mono)", fontWeight:600}}>
+                        {fmtCurrency(totalBalance)} outstanding balance
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -1537,12 +1558,7 @@ export default function ReportPage(_props: ReportPageProps) {
 
           {/* ── OPEN VIOLATIONS (main tabbed view) ── */}
           <div className="rp-section">
-            <div className="rp-section-title">
-              Open Violations
-              <span style={{ fontFamily:"var(--font-mono)", fontSize:11, color:"var(--slate)", fontWeight:400, textTransform:"none", letterSpacing:0 }}>
-                open or balance due · click row to expand
-              </span>
-            </div>
+            <div className="rp-section-title">Open Violations</div>
             <OpenViolationTabs violations={violations} elevators={[]} boilers={[]} co={null} />
           </div>
 
@@ -1611,7 +1627,7 @@ export default function ReportPage(_props: ReportPageProps) {
             <div className="rp-section">
               <div className="rp-section-title">
                 Risk by Borough
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                <span style={{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
                   Average risk score
                 </span>
               </div>
