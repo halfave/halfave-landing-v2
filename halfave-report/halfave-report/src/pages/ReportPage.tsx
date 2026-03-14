@@ -27,20 +27,7 @@ const BOROUGH_NAMES: Record<string, string> = {
 function getBoroughName(b?: number | string | null) {
   if (!b) return "NYC";
   return BOROUGH_NAMES[String(b)] ?? "NYC";
-}
-
-function riskColor(percentile: number) {
-  if (percentile >= 75) return "var(--risk-green)";
-  if (percentile >= 50) return "var(--risk-amber)";
-  return "var(--risk-green)";
-}
-
-function riskBg(percentile: number) {
-  if (percentile >= 75) return "var(--risk-green-bg)";
-  if (percentile >= 50) return "var(--risk-amber-bg)";
-  return "var(--risk-green-bg)";
-}
-function fmtCurrency(n?: number | null) {
+}function fmtCurrency(n?: number | null) {
   if (!n) return "–";
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
 }
