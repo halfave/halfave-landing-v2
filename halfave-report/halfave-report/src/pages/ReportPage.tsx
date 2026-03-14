@@ -753,20 +753,6 @@ function BoroughMap({ stats, highlight }: { stats: BoroughStat[]; highlight?: st
   );
 }
 
- {
-  const dl = d.toLowerCase();
-  if (dl.includes("boiler")) return { icon: "🔥", bg: "#fdf0ed", color: "#c4533a" };
-  if (dl.includes("elevator") || dl.includes("lift")) return { icon: "🏗️", bg: "#fdf0ed", color: "#c4533a" };
-  if (dl.includes("tco") || dl.includes("certificate")) return { icon: "📋", bg: "#fdf8ec", color: "#c9a227" };
-  if (dl.includes("open violation") || dl.includes("count")) return { icon: "⚠️", bg: "#fdf0ed", color: "#c4533a" };
-  if (dl.includes("recent") || dl.includes("12m") || dl.includes("trend")) return { icon: "📈", bg: "#fdf8ec", color: "#c9a227" };
-  if (dl.includes("age") || dl.includes("days")) return { icon: "🕐", bg: "#fdf8ec", color: "#c9a227" };
-  if (dl.includes("density")) return { icon: "📊", bg: "#fdf0ed", color: "#c4533a" };
-  if (dl.includes("severity") || dl.includes("class c") || dl.includes("class a")) return { icon: "🚨", bg: "#fdf0ed", color: "#c4533a" };
-  if (dl.includes("resolution") || dl.includes("resolve")) return { icon: "⏱️", bg: "#fdf8ec", color: "#c9a227" };
-  if (dl.includes("penalty") || dl.includes("balance") || dl.includes("fine")) return { icon: "💰", bg: "#fdf8ec", color: "#c9a227" };
-  return { icon: "⚡", bg: "#f0ede8", color: "#7a8fa6" };
-}
 
 // ─── Violation + Inspection Tabs ─────────────────────────────────────────────
 type VTab = "HPD" | "DOB" | "ECB_OATH" | "Inspections" | "TCO";
