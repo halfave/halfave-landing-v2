@@ -709,7 +709,7 @@ function BoroughMap({ stats, highlight }: { stats: BoroughStat[]; highlight?: st
     if (!svgRef.current || stats.length === 0) return;
     const svg = svgRef.current;
 
-    fetch("https://data.cityofnewyork.us/resource/7t3b-ywvw.geojson")
+    fetch("https://mjkkzniagexfooclqsjr.supabase.co/functions/v1/nyc-geojson")
       .then(r => r.json())
       .then(geojson => {
         // Simple Mercator projection fitted to 200x220 viewBox
