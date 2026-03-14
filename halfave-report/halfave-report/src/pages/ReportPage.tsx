@@ -192,7 +192,7 @@ const CSS = `
   /* ── SCORE BAND ── */
   .rp-band {
     height: 6px;
-    background: linear-gradient(to right, #3a7d5e 0%, #c9a227 50%, #c4533a 100%);
+    background: linear-gradient(to right, #c4533a 0%, #c9a227 50%, #3a7d5e 100%);
     position: relative;
     margin-top: 0;
   }
@@ -1088,6 +1088,18 @@ function PeerBar({
   );
 }
 
+interface BuildingInsights {
+  inspection_days_12m: number | null;
+  inspection_days_peer_avg: number | null;
+  unit_band: string | null;
+  violations_by_year: Record<string, number> | null;
+  violations_5yr_total: number | null;
+  violations_5yr_trend: "increasing" | "decreasing" | "stable" | null;
+  oldest_open_violation_days: number | null;
+  multi_agency_count: number | null;
+  long_open_count: number | null;
+}
+
 // ─── Main ReportPage ──────────────────────────────────────────────────────────
 interface ReportPageProps {
   building?: Building;
@@ -1104,6 +1116,7 @@ export default function ReportPage(_props: ReportPageProps) {
   const [features, setFeatures] = useState<BuildingFeatures | null>(null);
   const [violations, setViolations] = useState<Violation[]>([]);
   const [boroughStats, setBoroughStats] = useState<BoroughStat[]>([]);
+  const [insights, setInsights] = useState<BuildingInsights | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -1328,6 +1341,18 @@ export default function ReportPage(_props: ReportPageProps) {
           setBoroughStats(stats);
         }
       } catch (_) { /* borough stats optional */ }
+
+      // Fetch building insights (inspection frequency, momentum, hidden risks)
+      if (resolvedBldg.id && !resolvedBldg.id.startsWith('bin-')) {
+        try {
+          const { data: insData } = await (supabase as any)
+            .from("building_insights")
+            .select("*")
+            .eq("building_id", resolvedBldg.id)
+            .single();
+          if (insData) setInsights(insData);
+        } catch (_) { /* insights optional */ }
+      }
     } catch (e: any) {
       setError(e?.message || "Failed to load report.");
     } finally {
@@ -1381,7 +1406,7 @@ export default function ReportPage(_props: ReportPageProps) {
 
   const scoreColor = riskColor(pct);
   const scoreBg = riskBg(pct);
-  const bandPct = (score / 100) * 100;
+  const bandPct = 100 - (score / 100) * 100;
 
   // Peer comparison data (NYC averages rough estimates)
   const peerRows = features
@@ -1560,57 +1585,112 @@ export default function ReportPage(_props: ReportPageProps) {
             <OpenViolationTabs violations={violations} elevators={[]} boilers={[]} co={null} />
           </div>
 
-          {/* ── BUILDING METRICS ── */}
-          {features && (
+          {/* ── INSPECTION FREQUENCY ── */}
+          {insights && (
             <div className="rp-section">
-              <div className="rp-section-title">Building Metrics</div>
-              <div className="rp-stats-grid">
-                <div className="rp-stat">
-                  <div className={`rp-stat-val ${features.open_violations > 20 ? "rp-stat-warn" : features.open_violations > 10 ? "rp-stat-caution" : "rp-stat-ok"}`}>
-                    {fmt(features.open_violations)}
-                  </div>
-                  <div className="rp-stat-lbl">Open violations</div>
+              <div className="rp-section-title">Inspection Frequency</div>
+              <div className="rp-card" style={{ padding: "20px 24px" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 8 }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 40, fontWeight: 700,
+                    color: (insights.inspection_days_12m ?? 0) > (insights.inspection_days_peer_avg ?? 0) * 1.5
+                      ? "var(--risk-red)" : (insights.inspection_days_12m ?? 0) > (insights.inspection_days_peer_avg ?? 0)
+                      ? "var(--risk-amber)" : "var(--risk-green)" }}>
+                    {insights.inspection_days_12m ?? 0}
+                  </span>
+                  <span style={{ fontSize: 14, color: "var(--slate)", fontFamily: "var(--font-sans)" }}>
+                    inspection visits in the last 12 months
+                  </span>
                 </div>
-                <div className="rp-stat">
-                  <div className={`rp-stat-val ${features.recent_12m_violations > 30 ? "rp-stat-warn" : features.recent_12m_violations > 15 ? "rp-stat-caution" : ""}`}>
-                    {fmt(features.recent_12m_violations)}
-                  </div>
-                  <div className="rp-stat-lbl">New last 12 months</div>
+                <div style={{ fontSize: 13, color: "var(--navy)", fontFamily: "var(--font-sans)", lineHeight: 1.6 }}>
+                  {(() => {
+                    const mine = insights.inspection_days_12m ?? 0;
+                    const avg = insights.inspection_days_peer_avg ?? 0;
+                    const peerLabel = `similar ${insights.unit_band ?? ""}-unit buildings in this borough`;
+                    if (mine === 0) return `No inspections recorded in the last 12 months.`;
+                    if (avg > 0 && mine > avg * 1.5) return <>Inspectors visited <strong>{mine}×</strong> — significantly more often than the peer average of <strong>{avg.toFixed(1)}×</strong> for {peerLabel}. High frequency suggests ongoing unresolved issues.</>;
+                    if (avg > 0 && mine > avg) return <>Inspectors visited <strong>{mine}×</strong> — above the peer average of <strong>{avg.toFixed(1)}×</strong> for {peerLabel}.</>;
+                    if (avg > 0) return <>Inspectors visited <strong>{mine}×</strong> — in line with the peer average of <strong>{avg.toFixed(1)}×</strong> for {peerLabel}.</>;
+                    return <>Inspectors visited <strong>{mine}×</strong> in the last 12 months.</>;
+                  })()}
                 </div>
-                <div className="rp-stat">
-                  <div className={`rp-stat-val ${features.avg_open_age_days > 500 ? "rp-stat-warn" : features.avg_open_age_days > 200 ? "rp-stat-caution" : ""}`}>
-                    {Math.round(features.avg_open_age_days)}d
+              </div>
+            </div>
+          )}
+
+          {/* ── VIOLATION MOMENTUM ── */}
+          {insights?.violations_by_year && (
+            <div className="rp-section">
+              <div className="rp-section-title">Violation Momentum
+                <span style={{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0, marginLeft: 8 }}>
+                  last 5 years · {insights.violations_5yr_total ?? 0} total
+                  {insights.violations_5yr_trend && (
+                    <span style={{ marginLeft: 8, color: insights.violations_5yr_trend === "increasing" ? "var(--risk-red)" : insights.violations_5yr_trend === "decreasing" ? "var(--risk-green)" : "var(--slate)" }}>
+                      {insights.violations_5yr_trend === "increasing" ? "↑ increasing" : insights.violations_5yr_trend === "decreasing" ? "↓ decreasing" : "→ stable"}
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="rp-card" style={{ padding: "20px 24px" }}>
+                {(() => {
+                  const byYear = insights.violations_by_year!;
+                  const years = Object.keys(byYear).sort();
+                  const maxVal = Math.max(...Object.values(byYear), 1);
+                  const currentYear = new Date().getFullYear().toString();
+                  return (
+                    <div style={{ display: "flex", gap: 8, alignItems: "flex-end", height: 80 }}>
+                      {years.map(yr => {
+                        const val = byYear[yr];
+                        const h = Math.round((val / maxVal) * 72);
+                        const isCurrent = yr === currentYear;
+                        const color = val > maxVal * 0.7 ? "var(--risk-red)" : val > maxVal * 0.4 ? "var(--risk-amber)" : "var(--risk-green)";
+                        return (
+                          <div key={yr} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                            <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--navy)", fontWeight: 600 }}>{val}</div>
+                            <div style={{ width: "100%", height: h, background: isCurrent ? "var(--slate)" : color, borderRadius: 3, opacity: isCurrent ? 0.5 : 1 }} />
+                            <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--slate)" }}>{yr.slice(2)}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
+          {/* ── HIDDEN RISK SIGNALS ── */}
+          {insights && (insights.long_open_count ?? 0) + (insights.multi_agency_count ?? 0) + (insights.oldest_open_violation_days ?? 0) > 0 && (
+            <div className="rp-section">
+              <div className="rp-section-title">Hidden Risk Signals</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {(insights.oldest_open_violation_days ?? 0) > 365 && (
+                  <div className="rp-alert amber">
+                    <div className="rp-alert-icon">🕐</div>
+                    <div className="rp-alert-body">
+                      <div className="rp-alert-title">Aging open violations</div>
+                      <p>The oldest unresolved violation has been open for <strong>{Math.round((insights.oldest_open_violation_days ?? 0) / 365 * 10) / 10} years</strong>
+                        {(insights.long_open_count ?? 0) > 0 && <>, and <strong>{insights.long_open_count}</strong> violation{insights.long_open_count !== 1 ? "s are" : " is"} more than 3 years old</>}.
+                        Long-standing violations often compound over time and attract additional enforcement.
+                      </p>
+                    </div>
                   </div>
-                  <div className="rp-stat-lbl">Avg days open</div>
-                </div>
-                <div className="rp-stat">
-                  <div className={`rp-stat-val ${features.violation_density > 1 ? "rp-stat-warn" : features.violation_density > 0.5 ? "rp-stat-caution" : "rp-stat-ok"}`}>
-                    {features.violation_density.toFixed(2)}
+                )}
+                {(insights.multi_agency_count ?? 0) > 2 && (
+                  <div className="rp-alert amber">
+                    <div className="rp-alert-icon">🏛️</div>
+                    <div className="rp-alert-body">
+                      <div className="rp-alert-title">Multiple agencies citing same periods</div>
+                      <p>In <strong>{insights.multi_agency_count}</strong> separate months, more than one city agency issued violations on the same day — a pattern that indicates systemic issues rather than isolated incidents.</p>
+                    </div>
                   </div>
-                  <div className="rp-stat-lbl">Violations per unit</div>
-                </div>
-                <div className="rp-stat">
-                  <div className={`rp-stat-val ${features.resolution_rate < 0.5 ? "rp-stat-warn" : features.resolution_rate < 0.7 ? "rp-stat-caution" : "rp-stat-ok"}`}>
-                    {Math.round(features.resolution_rate * 100)}%
-                  </div>
-                  <div className="rp-stat-lbl">Resolution rate</div>
-                </div>
-                <div className="rp-stat">
-                  <div className={`rp-stat-val ${features.avg_resolution_days > 365 ? "rp-stat-warn" : features.avg_resolution_days > 180 ? "rp-stat-caution" : ""}`}>
-                    {Math.round(features.avg_resolution_days)}d
-                  </div>
-                  <div className="rp-stat-lbl">Avg days to resolve</div>
-                </div>
-                <div className="rp-stat">
-                  <div className={`rp-stat-val ${features.severity_points > 200 ? "rp-stat-warn" : features.severity_points > 100 ? "rp-stat-caution" : ""}`}>
-                    {fmt(features.severity_points)}
-                  </div>
-                  <div className="rp-stat-lbl">Severity score</div>
-                </div>
-                {totalBalance > 0 && (
-                  <div className="rp-stat">
-                    <div className="rp-stat-val rp-stat-warn">{fmtCurrency(totalBalance)}</div>
-                    <div className="rp-stat-lbl">Balance due</div>
+                )}
+                {(insights.inspection_days_12m ?? 0) > (insights.inspection_days_peer_avg ?? 0) * 2 && (
+                  <div className="rp-alert red">
+                    <div className="rp-alert-icon">🔍</div>
+                    <div className="rp-alert-body">
+                      <div className="rp-alert-title">High inspection frequency</div>
+                      <p>This building is being inspected <strong>{(insights.inspection_days_12m ?? 0)}×</strong> per year — more than twice the peer average of {(insights.inspection_days_peer_avg ?? 0).toFixed(1)}×. Frequent inspections often indicate that prior violations were not fully resolved.</p>
+                    </div>
                   </div>
                 )}
               </div>
