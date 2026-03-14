@@ -1208,9 +1208,15 @@ export default function ReportPage(_props: ReportPageProps) {
       const boroughNameMap: Record<string, string> = {
         "1": "Manhattan", "2": "Bronx", "3": "Brooklyn", "4": "Queens", "5": "Staten Island",
       };
-Promise.all([
-        supabaseBase.schema("analytics").rpc("borough_avg_scores"),
-        supabaseBase.schema("analytics").rpc("ownership_avg_scores"),
+const SUPA_RPC = (fn: string) => fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, {
+        method: "POST",
+        headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", "Content-Profile": "analytics" },
+        body: "{}",
+      }).then(r => r.json()).then(data => ({ data, error: null })).catch(e => ({ data: null, error: e }));
+
+      Promise.all([
+        SUPA_RPC("borough_avg_scores"),
+        SUPA_RPC("ownership_avg_scores"),
         w?.bin ? (supabase as any)
           .from("buildings")
           .select("building_insights(inspection_days_peer_avg)")
