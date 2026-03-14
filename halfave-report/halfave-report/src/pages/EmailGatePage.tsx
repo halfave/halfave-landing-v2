@@ -90,7 +90,7 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
 
         {/* Score */}
         <div style={s.scoreBlock}>
-          <div style={s.scoreEyebrow} className="eg-mono">Building Risk Score</div>
+          <div style={s.scoreEyebrow} className="eg-mono">Building Health Index</div>
           <div style={{ ...s.scoreNum, color: bucketColor }}>{score}</div>
           <div style={s.scorePct}>Higher risk than {building.percentile ?? '—'}% of NYC buildings</div>
         </div>
@@ -153,6 +153,7 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
           {error && <div style={s.error}>{error}</div>}
           <p style={s.privacy} className="eg-mono">
             We'll email you this report. No spam, no account required.
+          © 2026 Half Ave Company LLC. All rights reserved.
           </p>
         </div>
 
