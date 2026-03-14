@@ -632,59 +632,7 @@ function boroughScoreColor(score: number) {
 
 // ─── Driver icon/color map ────────────────────────────────────────────────────
 
-// ─── Accurate NYC Borough SVG Map ─────────────────────────────────────────────: { stats: BoroughStat[]; highlight?: string }) {
-  const statMap = Object.fromEntries(stats.map((s) => [s.name, s]));
-  // Real SVG paths from Wikipedia NYC borough map (viewBox 0 0 549 524)
-  const PATHS: Record<string, { d: string; lx: number; ly: number }> = {
-    Bronx: {
-      d: "M 203,22 L 216,18 L 234,22 L 248,30 L 258,42 L 262,56 L 258,70 L 250,80 L 238,88 L 224,92 L 210,90 L 198,84 L 190,74 L 186,62 L 188,50 L 196,38 Z",
-      lx: 224, ly: 56,
-    },
-    Manhattan: {
-      d: "M 260,56 L 264,48 L 270,42 L 278,38 L 286,38 L 292,42 L 296,50 L 298,60 L 296,72 L 292,100 L 288,128 L 284,152 L 280,170 L 274,182 L 268,188 L 262,186 L 258,178 L 256,164 L 256,144 L 258,120 L 260,96 L 262,72 Z",
-      lx: 277, ly: 112,
-    },
-    Queens: {
-      d: "M 296,72 L 310,68 L 326,66 L 344,66 L 362,70 L 378,78 L 390,90 L 396,104 L 396,120 L 390,134 L 380,144 L 366,150 L 350,152 L 334,150 L 320,144 L 308,134 L 300,122 L 296,108 Z",
-      lx: 348, ly: 110,
-    },
-    Brooklyn: {
-      d: "M 280,170 L 296,168 L 312,168 L 326,172 L 338,180 L 346,192 L 348,206 L 344,220 L 336,232 L 324,240 L 310,244 L 296,242 L 282,236 L 272,226 L 266,214 L 264,200 L 266,188 L 274,182 Z",
-      lx: 308, ly: 206,
-    },
-    "Staten Island": {
-      d: "M 122,290 L 136,282 L 152,278 L 168,278 L 182,284 L 192,294 L 196,308 L 194,322 L 186,334 L 174,342 L 160,346 L 146,344 L 132,338 L 122,328 L 116,314 L 116,300 Z",
-      lx: 156, ly: 312,
-    },
-  };
 
-  return (
-    <svg viewBox="0 0 500 380" className="rp-borough-map-svg" xmlns="http://www.w3.org/2000/svg">
-      {Object.entries(PATHS).map(([name, { d, lx, ly }]) => {
-        const stat = statMap[name];
-        const fillColor = stat ? boroughScoreColor(stat.avg_score) : "#e2e8f0";
-        const isHL = name === highlight;
-        const abbr: Record<string,string> = { Manhattan:"MN", Bronx:"BX", Brooklyn:"BK", Queens:"QN", "Staten Island":"SI" };
-        return (
-          <g key={name}>
-            <path d={d} fill={fillColor} fillOpacity={isHL ? 1 : 0.8}
-              stroke="white" strokeWidth={isHL ? 2.5 : 1.5} strokeLinejoin="round" />
-            <text x={lx} y={ly - 6} textAnchor="middle" fontSize={9}
-              fontFamily="monospace" fill="white" fontWeight="700" pointerEvents="none">
-              {abbr[name]}
-            </text>
-            {stat && (
-              <text x={lx} y={ly + 5} textAnchor="middle" fontSize={8}
-                fontFamily="monospace" fill="white" pointerEvents="none">
-                {stat.avg_score.toFixed(1)}
-              </text>
-            )}
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
 
 
 // ─── Violation + Inspection Tabs ─────────────────────────────────────────────
