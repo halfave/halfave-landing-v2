@@ -80,10 +80,7 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
           </svg>
           Back
         </button>
-        {logoErr
-          ? <span style={s.logoFallback}>Half/Ave</span>
-          : <img src={LOGO} alt="Half/Ave" style={s.logo} onError={() => setLogoErr(true)} />
-        }
+
       </header>
 
       <div style={s.body}>
@@ -157,6 +154,12 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
           <p style={s.copyright} className="eg-mono">
             © 2026 Half Ave Company LLC. All rights reserved.
           </p>
+          <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
+            {logoErr
+              ? <span style={s.logoFallback}>Half/Ave</span>
+              : <img src={LOGO} alt="Half/Ave" style={s.logo} onError={() => setLogoErr(true)} />
+            }
+          </div>
         </div>
 
       </div>
