@@ -1375,8 +1375,6 @@ export default function ReportPage(_props: ReportPageProps) {
   const bucket = rs?.risk_bucket ?? "Unknown";
   const boroughName = getBoroughName(building.borough);
 
-  const _openViolations = features?.open_violations ?? violations.filter((v) => v.is_open).length;
-  const _recent12m = features?.recent_12m_violations ?? 0;
 
   // Financial exposure
   const totalBalance = violations.reduce((s, v) => s + (v.balance_due ?? 0), 0);
