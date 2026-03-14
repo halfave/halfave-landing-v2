@@ -1047,11 +1047,15 @@ export default function ReportPage(_props: ReportPageProps) {
           boroName, "NY",
         ].filter(Boolean).join(", ") || `BIN ${urlBin}`;
 
-        // Quick risk score from HPD violations
+        // ── RISK SCORE (DB formula v1.0) ─────────────────────────────────────
         const hpd = Array.isArray(hpdViolRaw) ? hpdViolRaw : [];
         const openHpd = hpd.filter((v: any) => {
           const s = (v.currentstatus || v.violationstatus || "").toLowerCase();
           return !s.includes("close") && !s.includes("dismiss");
+        });
+        const closedHpd = hpd.filter((v: any) => {
+          const s = (v.currentstatus || v.violationstatus || "").toLowerCase();
+          return s.includes("close") || s.includes("dismiss");
         });
         const classC = openHpd.filter((v: any) => (v.class || v.novtype || "").toUpperCase().startsWith("C"));
         const classB = openHpd.filter((v: any) => (v.class || v.novtype || "").toUpperCase().startsWith("B"));
@@ -1060,16 +1064,39 @@ export default function ReportPage(_props: ReportPageProps) {
           const bal = parseFloat(v.balance_due ?? "NaN");
           return !(cert !== "NO COMPLIANCE RECORDED" && !isNaN(bal) && bal === 0);
         }) : [];
-        const dobOpen = Array.isArray(dobViolRaw) ? dobViolRaw.filter((v: any) => { const cat = (v.violation_category || "").trim(); return cat === "V-DOB VIOLATION - ACTIVE" || (!cat.includes("*") && cat !== ""); }) : [];
+        const dobOpen = Array.isArray(dobViolRaw) ? dobViolRaw.filter((v: any) => {
+          const cat = (v.violation_category || "").trim();
+          return cat === "V-DOB VIOLATION - ACTIVE" || (!cat.includes("*") && cat !== "");
+        }) : [];
 
-        let pts = classC.length * 4 + classB.length * 2 + (openHpd.length - classC.length - classB.length) * 0.5
-          + dobOpen.length * 2 + ecbOpen.length * 2;
-        pts = Math.min(pts, 50);
-        const riskScore = Math.max(Math.min(Math.round(pts), 100), 5);
-        const pctMap = [5,10,20,30,40,50,60,70,80,90,100];
-        const pctVal = [8,20,35,48,60,70,78,85,91,96,99];
-        const percentile = pctVal[pctMap.findIndex(x => riskScore <= x) ?? 10];
-        const riskBucket = riskScore >= 70 ? "Critical" : riskScore >= 55 ? "High Risk" : riskScore >= 35 ? "Elevated" : riskScore >= 20 ? "Watch" : "Healthy";
+        // DB formula: health_score = 100 - raw_risk
+        const P95_DENSITY = 0.75;
+        const P90_RESOLUTION = 209;
+        const allOpenForScore = [
+          ...openHpd.map((v: any) => ({ cls: (v.class||v.novtype||"").toUpperCase().charAt(0), agency: "HPD", desc: "" })),
+          ...dobOpen.map((v: any) => ({ agency: "DOB", cls: "", desc: v.description||"" })),
+          ...ecbOpen.map((v: any) => ({ agency: "ECB", cls: "", desc: v.section_law_description1||"" })),
+        ];
+        const swts = allOpenForScore.map((v: any) => {
+          if (v.agency === "HPD") return v.cls === "C" ? 10 : v.cls === "B" ? 5 : 1;
+          if (v.agency === "DOB") return 3;
+          if (v.agency === "ECB") { const d = v.desc.toUpperCase(); return d.includes("IMMEDIATELY HAZARDOUS") ? 10 : d.includes("HAZARDOUS") ? 5 : 2; }
+          return 1;
+        });
+        const worstW = swts.length > 0 ? Math.max(...swts) : 0;
+        const avgW   = swts.length > 0 ? swts.reduce((a: number, b: number) => a + b, 0) / swts.length : 0;
+        const hb_units = parseInt(String(hb.legalclassa || bldg.units_res || "1")) || 1;
+        const densityNorm = Math.min((allOpenForScore.length / hb_units) / P95_DENSITY, 1);
+        const closedWithDates = closedHpd.filter((v: any) => v.novissueddate);
+        const avgResDays = closedWithDates.length > 0
+          ? closedWithDates.reduce((s: number, v: any) => s + Math.min((Date.now() - new Date(v.novissueddate).getTime()) / 86400000, 1000), 0) / closedWithDates.length
+          : 0;
+        const rawRisk = (worstW * 0.30) + (avgW * 0.22) + (densityNorm * 18) + Math.min(avgResDays / P90_RESOLUTION, 1) * 6;
+        const riskScore = Math.max(0, Math.min(100, Math.round(100 - rawRisk)));
+        const riskBucket = riskScore >= 80 ? "Healthy" : riskScore >= 60 ? "Good" : riskScore >= 40 ? "Fair" : "Watch";
+        const pctMap = [0,30,40,50,60,70,80,90,95,100];
+        const pctVal = [2,5,10,18,30,45,60,80,90,99];
+        const percentile = pctVal[pctMap.findIndex((x: number) => riskScore <= x) ?? 9] ?? 99;
 
         // Synthesize violations for the tabs
         const toW = (arr: any[], isOpen: boolean) => arr.map((v: any) => ({
