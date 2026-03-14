@@ -1317,7 +1317,7 @@ export default function ReportPage(_props: ReportPageProps) {
       };
       Promise.all([
         // Pre-aggregated borough stats via RPC
-        (supabase as any).rpc("borough_avg_scores"),
+        (supabase as any).schema("analytics").rpc("borough_avg_scores"),
         // Peer avg by BIN
         w?.bin ? (supabase as any)
           .from("buildings")
