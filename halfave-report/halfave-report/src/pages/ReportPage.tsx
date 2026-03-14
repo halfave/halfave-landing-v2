@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ─── Supabase ────────────────────────────────────────────────────────────────
@@ -699,119 +699,60 @@ function boroughScoreColor(score: number) {
 
 // ─── Accurate NYC Borough SVG Map ─────────────────────────────────────────────
 function BoroughMap({ stats, highlight }: { stats: BoroughStat[]; highlight?: string }) {
-  const svgRef = useRef<SVGSVGElement>(null);
   const statMap = Object.fromEntries(stats.map((s) => [s.name, s]));
-  const abbr: Record<string, string> = {
-    Manhattan: "MN", Bronx: "BX", Brooklyn: "BK", Queens: "QN", "Staten Island": "SI",
+
+  // Accurate pre-projected NYC borough paths (Mercator, viewBox 0 0 400 440)
+  const PATHS: Record<string, { d: string; lx: number; ly: number }> = {
+    Manhattan: {
+      d: "M215,28 L219,22 L225,18 L232,17 L238,20 L243,26 L246,34 L248,44 L249,56 L249,70 L248,84 L246,98 L244,112 L241,124 L238,134 L234,142 L229,148 L224,151 L219,148 L215,141 L212,130 L210,118 L209,104 L209,90 L209,76 L210,62 L212,48 Z",
+      lx: 229, ly: 90,
+    },
+    Bronx: {
+      d: "M215,28 L212,48 L210,62 L209,76 L200,74 L190,72 L180,70 L170,70 L160,72 L152,76 L147,82 L145,90 L146,98 L150,106 L157,112 L166,116 L176,117 L186,115 L196,111 L204,106 L209,100 L209,90 L210,76 L212,62 L214,46 L216,36 Z",
+      lx: 175, ly: 93,
+    },
+    Queens: {
+      d: "M248,112 L249,98 L249,84 L254,82 L262,80 L272,78 L283,78 L294,80 L304,84 L312,90 L317,98 L319,107 L318,116 L314,124 L307,131 L298,136 L288,140 L278,143 L268,146 L258,150 L250,154 L244,158 L240,162 L236,164 L232,162 L230,156 L230,148 L233,140 L238,134 L241,124 L244,112 Z",
+      lx: 278, ly: 118,
+    },
+    Brooklyn: {
+      d: "M232,162 L236,164 L240,162 L244,158 L250,154 L252,164 L252,174 L250,184 L246,194 L241,203 L235,211 L228,218 L220,222 L212,224 L204,222 L197,217 L192,210 L190,202 L190,193 L192,184 L196,175 L202,167 L208,160 L215,155 L222,153 L228,155 L230,156 L230,148 L233,140 L234,142 L229,148 L224,151 Z",
+      lx: 220, ly: 192,
+    },
+    "Staten Island": {
+      d: "M118,272 L126,264 L136,258 L148,255 L160,256 L170,260 L177,267 L181,276 L182,286 L180,296 L175,305 L167,312 L157,317 L146,319 L135,317 L125,312 L118,304 L114,294 L113,283 Z",
+      lx: 147, ly: 288,
+    },
   };
 
-  useEffect(() => {
-    if (!svgRef.current || stats.length === 0) return;
-    const svg = svgRef.current;
-
-    fetch("https://mjkkzniagexfooclqsjr.supabase.co/functions/v1/nyc-geojson")
-      .then(r => r.json())
-      .then(geojson => {
-        // Simple Mercator projection fitted to 200x220 viewBox
-        const W = 200, H = 220;
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-
-        function project(lon: number, lat: number): [number, number] {
-          const x = (lon + 74.26) * 1500;
-          const y = (40.92 - lat) * 1800;
-          return [x, y];
-        }
-
-        // First pass: get bounds
-        for (const f of geojson.features) {
-          const coords = f.geometry.type === "MultiPolygon"
-            ? f.geometry.coordinates.flat(2)
-            : f.geometry.coordinates.flat(1);
-          for (const [lon, lat] of coords) {
-            const [px, py] = project(lon, lat);
-            if (px < minX) minX = px; if (px > maxX) maxX = px;
-            if (py < minY) minY = py; if (py > maxY) maxY = py;
-          }
-        }
-        const scaleX = (W - 16) / (maxX - minX);
-        const scaleY = (H - 16) / (maxY - minY);
-        const scale = Math.min(scaleX, scaleY);
-        const offX = (W - (maxX - minX) * scale) / 2 - minX * scale;
-        const offY = (H - (maxY - minY) * scale) / 2 - minY * scale;
-
-        function fit(lon: number, lat: number): [number, number] {
-          const [px, py] = project(lon, lat);
-          return [px * scale + offX, py * scale + offY];
-        }
-
-        function coordsToPath(rings: number[][][]): string {
-          return rings.map(ring =>
-            ring.map(([lon, lat], i) => {
-              const [x, y] = fit(lon, lat);
-              return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-            }).join(" ") + " Z"
-          ).join(" ");
-        }
-
-        // Clear previous
-        while (svg.firstChild) svg.removeChild(svg.firstChild);
-
-        for (const f of geojson.features) {
-          const name = f.properties.boro_name;
-          const stat = statMap[name];
-          const fillColor = stat ? boroughScoreColor(stat.avg_score) : "#cbd5e1";
-          const isHL = name === highlight;
-
-          const rings = f.geometry.type === "MultiPolygon"
-            ? f.geometry.coordinates.flatMap((p: number[][][][]) => p)
-            : f.geometry.coordinates;
-
-          const pathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
-          pathEl.setAttribute("d", coordsToPath(rings));
-          pathEl.setAttribute("fill", fillColor);
-          pathEl.setAttribute("fill-opacity", isHL ? "1" : "0.82");
-          pathEl.setAttribute("stroke", "white");
-          pathEl.setAttribute("stroke-width", isHL ? "2" : "1");
-          svg.appendChild(pathEl);
-
-          // Label at centroid (average of all ring coords)
-          const allCoords = rings.flat(1);
-          const cx = allCoords.reduce((s: number, c: number[]) => s + fit(c[0], c[1])[0], 0) / allCoords.length;
-          const cy = allCoords.reduce((s: number, c: number[]) => s + fit(c[0], c[1])[1], 0) / allCoords.length;
-
-          const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-
-          const t1 = document.createElementNS("http://www.w3.org/2000/svg", "text");
-          t1.setAttribute("x", cx.toFixed(1));
-          t1.setAttribute("y", (cy - 5).toFixed(1));
-          t1.setAttribute("text-anchor", "middle");
-          t1.setAttribute("font-size", "9");
-          t1.setAttribute("font-family", "monospace");
-          t1.setAttribute("fill", "white");
-          t1.setAttribute("font-weight", "500");
-          t1.setAttribute("pointer-events", "none");
-          t1.textContent = abbr[name] ?? name;
-          g.appendChild(t1);
-
-          if (stat) {
-            const t2 = document.createElementNS("http://www.w3.org/2000/svg", "text");
-            t2.setAttribute("x", cx.toFixed(1));
-            t2.setAttribute("y", (cy + 6).toFixed(1));
-            t2.setAttribute("text-anchor", "middle");
-            t2.setAttribute("font-size", "8");
-            t2.setAttribute("font-family", "monospace");
-            t2.setAttribute("fill", "white");
-            t2.setAttribute("pointer-events", "none");
-            t2.textContent = stat.avg_score.toFixed(1);
-            g.appendChild(t2);
-          }
-          svg.appendChild(g);
-        }
-      })
-      .catch(() => { /* silently fail — map is decorative */ });
-  }, [stats, highlight]);
-
-  return <svg ref={svgRef} viewBox="0 0 200 220" className="rp-borough-map-svg" />;
+  return (
+    <svg viewBox="0 0 400 440" className="rp-borough-map-svg" xmlns="http://www.w3.org/2000/svg">
+      {Object.entries(PATHS).map(([name, { d, lx, ly }]) => {
+        const stat = statMap[name];
+        const fillColor = stat ? boroughScoreColor(stat.avg_score) : "#cbd5e1";
+        const isHL = name === highlight;
+        return (
+          <g key={name}>
+            <path
+              d={d}
+              fill={fillColor}
+              fillOpacity={isHL ? 1 : 0.82}
+              stroke="white"
+              strokeWidth={isHL ? 2.5 : 1.5}
+            />
+            <text x={lx} y={ly - 7} className="rp-borough-label">
+              {name === "Staten Island" ? "SI" : name === "Manhattan" ? "MN" : name === "Brooklyn" ? "BK" : name === "Queens" ? "QN" : "BX"}
+            </text>
+            {stat && (
+              <text x={lx} y={ly + 6} className="rp-borough-score-label">
+                {stat.avg_score.toFixed(1)}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
 }
 
 
@@ -840,12 +781,20 @@ interface UnifiedViolation {
   link?: string;
 }
 
+function normalizeHPDClass(cls: string): string {
+  // HPD raw API uses first char of severity label: I=Immediately hazardous=C, H=Hazardous=B, L=Low/Non-hazardous=A
+  if (cls === "I") return "C";
+  if (cls === "H") return "B";
+  if (cls === "L") return "A";
+  return cls; // already A/B/C or empty
+}
+
 function toUV(arr: any[], source: string, open: boolean): UnifiedViolation[] {
   if (!open) return [];
   return (arr || []).map((v: any) => ({
     id: v.id || "",
     source,
-    cls: v.cls || "",
+    cls: source === "HPD" ? normalizeHPDClass(v.cls || "") : (v.cls || ""),
     desc: v.desc || v.description || "",
     date: v.date || v.issue_date || v.violation_date || "",
     balance: (v.penalty != null && Number(v.penalty) !== 0) ? Number(v.penalty) : null,
@@ -891,7 +840,7 @@ function ViolRow({ v }: { v: UnifiedViolation }) {
     <tr className="rp-vrow" onClick={() => setOpen(o => !o)} style={{ cursor:"pointer" }}>
       <td className="rp-vtd rp-vtd-badge"><ClsBadge cls={v.cls} source={v.source} /></td>
       <td className="rp-vtd rp-vtd-desc">
-        <div style={{ fontWeight:500, fontSize:13, color:"var(--navy)", lineHeight:1.4 }}>
+        <div style={{ fontWeight:500, fontSize:13, color:"var(--navy)", lineHeight:1.4, fontFamily:"var(--font-sans)" }}>
           {v.id && <span style={{ fontFamily:"var(--font-mono)", fontSize:10, color:"var(--slate)", marginRight:6 }}>#{v.id}</span>}
           {(v.desc || "No description").slice(0, open ? 9999 : 160)}{!open && (v.desc||"").length > 160 ? "…" : ""}
         </div>
@@ -1538,6 +1487,7 @@ export default function ReportPage(_props: ReportPageProps) {
   const rs = riskScore;
   const pct = rs?.percentile ?? 0;
   const score = rs?.risk_score ?? 0;
+  const healthScore = 100 - score;
   const bucket = rs?.risk_bucket ?? "Unknown";
   const boroughName = getBoroughName(building.borough);
 
@@ -1545,9 +1495,9 @@ export default function ReportPage(_props: ReportPageProps) {
   // Financial exposure
   const totalBalance = violations.reduce((s, v) => s + (v.balance_due ?? 0), 0);
 
-  const scoreColor = riskColor(pct);
-  const scoreBg = riskBg(pct);
-  const bandPct = 100 - (score / 100) * 100;
+  const scoreColor = healthScore >= 75 ? "var(--risk-green)" : healthScore >= 50 ? "var(--risk-amber)" : "var(--risk-red)";
+  const scoreBg = healthScore >= 75 ? "var(--risk-green-bg)" : healthScore >= 50 ? "var(--risk-amber-bg)" : "var(--risk-red-bg)";
+  const bandPct = healthScore;  // 0=left(red), 100=right(green)
 
   // Peer comparison data (NYC averages rough estimates)
   const peerRows = features
@@ -1595,7 +1545,7 @@ export default function ReportPage(_props: ReportPageProps) {
         {/* ── HERO ── */}
         <div className="rp-hero">
           <div className="rp-hero-inner">
-            <div className="rp-hero-eyebrow">NYC Building Risk Report · Half Ave</div>
+            <div className="rp-hero-eyebrow">NYC Building Health Report · Half Ave</div>
             <div className="rp-hero-address">{building.address}</div>
             <div className="rp-hero-meta">
               <span>{boroughName}</span>
@@ -1612,7 +1562,7 @@ export default function ReportPage(_props: ReportPageProps) {
                   className="rp-score-circle"
                   style={{ color: scoreColor, borderColor: scoreColor, background: scoreBg }}
                 >
-                  {score}
+                  {healthScore}
                 </div>
                 <div className="rp-score-label">Health Index</div>
                 <div
