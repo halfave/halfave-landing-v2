@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ─── Supabase ────────────────────────────────────────────────────────────────
@@ -592,7 +592,7 @@ const CSS = `
     align-items: start;
     padding: 24px;
   }
-  .rp-borough-map-svg { width: 100%; height: auto; }
+  .rp-borough-map-svg { width: 180px; height: auto; flex-shrink: 0; }
   .rp-borough-path {
     stroke: var(--cream);
     stroke-width: 1.5;
@@ -698,54 +698,120 @@ function boroughScoreColor(score: number) {
 // ─── Driver icon/color map ────────────────────────────────────────────────────
 
 // ─── Accurate NYC Borough SVG Map ─────────────────────────────────────────────
-const BOROUGH_PATHS: Record<string, { d: string; labelX: number; labelY: number }> = {
-  Manhattan: {
-    d: "M138,42 L142,38 L147,36 L151,38 L154,44 L156,52 L157,62 L156,74 L154,86 L152,96 L150,108 L149,118 L148,126 L146,132 L143,136 L140,138 L137,134 L135,126 L134,116 L133,104 L133,92 L133,80 L133,68 L134,56 L136,48 Z",
-    labelX: 144, labelY: 90,
-  },
-  Bronx: {
-    d: "M138,42 L136,48 L134,56 L133,66 L128,64 L122,62 L116,60 L110,60 L104,62 L100,66 L98,72 L98,80 L100,86 L104,90 L110,92 L116,92 L122,90 L128,88 L133,86 L134,86 L136,74 L137,62 L139,52 Z",
-    labelX: 113, labelY: 76,
-  },
-  Queens: {
-    d: "M150,108 L152,96 L154,86 L156,86 L162,86 L168,84 L174,82 L180,82 L186,84 L192,88 L196,94 L198,100 L198,108 L196,114 L192,120 L186,124 L180,126 L174,128 L168,130 L163,134 L158,138 L154,140 L150,140 L148,136 L149,126 L149,118 Z",
-    labelX: 173, labelY: 108,
-  },
-  Brooklyn: {
-    d: "M148,136 L150,140 L154,140 L158,138 L163,134 L163,142 L162,150 L160,158 L157,166 L154,172 L150,178 L146,182 L142,184 L138,184 L134,182 L130,178 L128,172 L127,166 L127,158 L128,150 L130,142 L133,136 L137,134 L140,138 L143,136 L146,132 Z",
-    labelX: 144, labelY: 162,
-  },
-  "Staten Island": {
-    d: "M88,200 L94,194 L100,190 L108,188 L116,188 L122,192 L126,198 L128,206 L128,214 L126,222 L122,228 L116,232 L108,234 L100,232 L94,226 L90,218 L88,210 Z",
-    labelX: 108, labelY: 211,
-  },
-};
-
 function BoroughMap({ stats, highlight }: { stats: BoroughStat[]; highlight?: string }) {
+  const svgRef = useRef<SVGSVGElement>(null);
   const statMap = Object.fromEntries(stats.map((s) => [s.name, s]));
-  return (
-    <svg viewBox="0 0 300 320" className="rp-borough-map-svg" xmlns="http://www.w3.org/2000/svg">
-      {Object.entries(BOROUGH_PATHS).map(([name, { d, labelX, labelY }]) => {
-        const stat = statMap[name];
-        const color = stat ? boroughScoreColor(stat.avg_score) : "#cbd5e1";
-        const isHighlight = name === highlight;
-        return (
-          <g key={name}>
-            <path d={d} className="rp-borough-path" fill={color}
-              opacity={isHighlight ? 1 : 0.82} strokeWidth={isHighlight ? 2.5 : 1.5} />
-            <text x={labelX} y={labelY - 7} className="rp-borough-label">
-              {name === "Staten Island" ? "SI" : name}
-            </text>
-            {stat && (
-              <text x={labelX} y={labelY + 6} className="rp-borough-score-label">
-                {stat.avg_score.toFixed(1)}
-              </text>
-            )}
-          </g>
-        );
-      })}
-    </svg>
-  );
+  const abbr: Record<string, string> = {
+    Manhattan: "MN", Bronx: "BX", Brooklyn: "BK", Queens: "QN", "Staten Island": "SI",
+  };
+
+  useEffect(() => {
+    if (!svgRef.current || stats.length === 0) return;
+    const svg = svgRef.current;
+
+    fetch("https://data.cityofnewyork.us/resource/7t3b-ywvw.geojson")
+      .then(r => r.json())
+      .then(geojson => {
+        // Simple Mercator projection fitted to 200x220 viewBox
+        const W = 200, H = 220;
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+        function project(lon: number, lat: number): [number, number] {
+          const x = (lon + 74.26) * 1500;
+          const y = (40.92 - lat) * 1800;
+          return [x, y];
+        }
+
+        // First pass: get bounds
+        for (const f of geojson.features) {
+          const coords = f.geometry.type === "MultiPolygon"
+            ? f.geometry.coordinates.flat(2)
+            : f.geometry.coordinates.flat(1);
+          for (const [lon, lat] of coords) {
+            const [px, py] = project(lon, lat);
+            if (px < minX) minX = px; if (px > maxX) maxX = px;
+            if (py < minY) minY = py; if (py > maxY) maxY = py;
+          }
+        }
+        const scaleX = (W - 16) / (maxX - minX);
+        const scaleY = (H - 16) / (maxY - minY);
+        const scale = Math.min(scaleX, scaleY);
+        const offX = (W - (maxX - minX) * scale) / 2 - minX * scale;
+        const offY = (H - (maxY - minY) * scale) / 2 - minY * scale;
+
+        function fit(lon: number, lat: number): [number, number] {
+          const [px, py] = project(lon, lat);
+          return [px * scale + offX, py * scale + offY];
+        }
+
+        function coordsToPath(rings: number[][][]): string {
+          return rings.map(ring =>
+            ring.map(([lon, lat], i) => {
+              const [x, y] = fit(lon, lat);
+              return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+            }).join(" ") + " Z"
+          ).join(" ");
+        }
+
+        // Clear previous
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+        for (const f of geojson.features) {
+          const name = f.properties.boro_name;
+          const stat = statMap[name];
+          const fillColor = stat ? boroughScoreColor(stat.avg_score) : "#cbd5e1";
+          const isHL = name === highlight;
+
+          const rings = f.geometry.type === "MultiPolygon"
+            ? f.geometry.coordinates.flatMap((p: number[][][][]) => p)
+            : f.geometry.coordinates;
+
+          const pathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          pathEl.setAttribute("d", coordsToPath(rings));
+          pathEl.setAttribute("fill", fillColor);
+          pathEl.setAttribute("fill-opacity", isHL ? "1" : "0.82");
+          pathEl.setAttribute("stroke", "white");
+          pathEl.setAttribute("stroke-width", isHL ? "2" : "1");
+          svg.appendChild(pathEl);
+
+          // Label at centroid (average of all ring coords)
+          const allCoords = rings.flat(1);
+          const cx = allCoords.reduce((s: number, c: number[]) => s + fit(c[0], c[1])[0], 0) / allCoords.length;
+          const cy = allCoords.reduce((s: number, c: number[]) => s + fit(c[0], c[1])[1], 0) / allCoords.length;
+
+          const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+
+          const t1 = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          t1.setAttribute("x", cx.toFixed(1));
+          t1.setAttribute("y", (cy - 5).toFixed(1));
+          t1.setAttribute("text-anchor", "middle");
+          t1.setAttribute("font-size", "9");
+          t1.setAttribute("font-family", "monospace");
+          t1.setAttribute("fill", "white");
+          t1.setAttribute("font-weight", "500");
+          t1.setAttribute("pointer-events", "none");
+          t1.textContent = abbr[name] ?? name;
+          g.appendChild(t1);
+
+          if (stat) {
+            const t2 = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            t2.setAttribute("x", cx.toFixed(1));
+            t2.setAttribute("y", (cy + 6).toFixed(1));
+            t2.setAttribute("text-anchor", "middle");
+            t2.setAttribute("font-size", "8");
+            t2.setAttribute("font-family", "monospace");
+            t2.setAttribute("fill", "white");
+            t2.setAttribute("pointer-events", "none");
+            t2.textContent = stat.avg_score.toFixed(1);
+            g.appendChild(t2);
+          }
+          svg.appendChild(g);
+        }
+      })
+      .catch(() => { /* silently fail — map is decorative */ });
+  }, [stats, highlight]);
+
+  return <svg ref={svgRef} viewBox="0 0 200 220" className="rp-borough-map-svg" />;
 }
 
 
