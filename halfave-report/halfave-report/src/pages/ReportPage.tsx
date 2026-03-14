@@ -2,10 +2,10 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ─── Supabase ────────────────────────────────────────────────────────────────
-const supabase = createClient(
-  "https://mjkkzniagexfooclqsjr.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qa2t6bmlhZ2V4Zm9vY2xxc2pyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3NDc4OTUsImV4cCI6MjA4NjMyMzg5NX0.RuaeazBn_IFWfXOlQ0ZDDTPsnTApNGmE_WpPi0o52gQ"
-).schema("analytics");
+const SUPA_URL = "https://mjkkzniagexfooclqsjr.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qa2t6bmlhZ2V4Zm9vY2xxc2pyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3NDc4OTUsImV4cCI6MjA4NjMyMzg5NX0.RuaeazBn_IFWfXOlQ0ZDDTPsnTApNGmE_WpPi0o52gQ";
+const supabase = createClient(SUPA_URL, SUPA_KEY).schema("analytics");
+const supabaseBase = createClient(SUPA_URL, SUPA_KEY);
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 import type { Building, RiskScore, BuildingFeatures, Violation, BoroughStat, HalfaveWindow, HalfaveBldgWindow } from "../types";
@@ -1209,14 +1209,16 @@ export default function ReportPage(_props: ReportPageProps) {
         "1": "Manhattan", "2": "Bronx", "3": "Brooklyn", "4": "Queens", "5": "Staten Island",
       };
 Promise.all([
-        supabase.rpc("borough_avg_scores"),
-        supabase.rpc("ownership_avg_scores"),
+        supabaseBase.schema("analytics").rpc("borough_avg_scores"),
+        supabaseBase.schema("analytics").rpc("ownership_avg_scores"),
         w?.bin ? (supabase as any)
           .from("buildings")
           .select("building_insights(inspection_days_peer_avg)")
           .eq("bin", String(w.bin))
           .single() : Promise.resolve({ data: null }),
       ]).then(([boroughRes, ownershipRes, peerRes]: any[]) => {
+        console.log("[halfave] boroughRes:", boroughRes);
+        console.log("[halfave] ownershipRes:", ownershipRes);
         if (boroughRes.data) {
           const stats: BoroughStat[] = boroughRes.data.map((r: any) => ({
             name: boroughNameMap[String(r.borough)] ?? String(r.borough),
@@ -1240,7 +1242,7 @@ Promise.all([
         if (peerAvg != null) {
           setInsights(prev => prev ? { ...prev, inspection_days_peer_avg: Number(peerAvg) } : prev);
         }
-      }).catch(() => { /* optional */ });
+      }).catch((err: any) => { console.error("[halfave] context fetch failed:", err); });
 
       // Compute insights client-side from window violation data
       try {
@@ -1744,11 +1746,13 @@ Promise.all([
           )}
 
           {/* ── CONTEXT TABLES (dark navy background) ── */}
-          {(boroughStats.length > 0 || ownershipStats.length > 0) && (
-            <div style={{ background: "#111e30", borderRadius: 16, padding: "24px", margin: "0 0 32px" }}>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 16 }}>
-                NYC context — all buildings
-              </div>
+          <div style={{ background: "#111e30", borderRadius: 16, padding: "24px", margin: "0 0 32px" }}>
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 16 }}>
+              NYC context — all buildings
+            </div>
+            {(boroughStats.length === 0 && ownershipStats.length === 0) ? (
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.3)" }}>Loading…</div>
+            ) : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 16 }}>
 
                 {/* Borough table */}
@@ -1810,8 +1814,8 @@ Promise.all([
                 )}
 
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* ── FOOTER ── */}
           <div style={{
