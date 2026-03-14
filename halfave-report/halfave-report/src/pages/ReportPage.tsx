@@ -214,7 +214,7 @@ const CSS = `
   /* ── SECTION ── */
   .rp-section { margin-bottom: 40px; }
   .rp-section-title {
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-size: 11px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -270,7 +270,7 @@ const CSS = `
     flex-shrink: 0;
   }
   .rp-driver-text {
-    font-family: var(--font-serif);
+    font-family: var(--font-sans);
     font-size: 14px;
     color: var(--navy);
     line-height: 1.4;
@@ -298,7 +298,7 @@ const CSS = `
     line-height: 1;
   }
   .rp-stat-lbl {
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-size: 11px;
     color: var(--slate);
     margin-top: 5px;
@@ -418,7 +418,7 @@ const CSS = `
   .rp-vtable tbody tr.expandable { cursor: pointer; }
   .rp-vtable td {
     padding: 10px 14px;
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-size: 12px;
     color: var(--navy);
     vertical-align: top;
@@ -464,7 +464,7 @@ const CSS = `
   }
   .rp-expand-field { display: flex; flex-direction: column; gap: 2px; }
   .rp-expand-key {
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-size: 10px;
     color: var(--slate);
     text-transform: uppercase;
@@ -482,7 +482,7 @@ const CSS = `
     display: block;
     width: 100%;
     padding: 12px;
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-size: 12px;
     letter-spacing: 0.06em;
     background: var(--bg);
@@ -516,7 +516,7 @@ const CSS = `
     margin-bottom: 3px;
   }
   .rp-alert-body p {
-    font-family: var(--font-serif);
+    font-family: var(--font-sans);
     font-size: 13px;
     line-height: 1.5;
   }
@@ -535,7 +535,7 @@ const CSS = `
     margin-bottom: 6px;
   }
   .rp-peer-name {
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-size: 12px;
     color: var(--navy);
   }
