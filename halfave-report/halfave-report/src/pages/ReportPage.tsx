@@ -1375,33 +1375,38 @@ export default function ReportPage(_props: ReportPageProps) {
       ];
       setViolations(allViolations);
 
-      // Borough stats: fetch from Supabase index (this is the comparison data, not the building itself)
-      try {
-        const db = (supabase as any).schema('analytics');
-        const { data: boroughData } = await db
+      // Borough stats + peer avg — run in parallel, non-blocking (don't await)
+      const boroughNameMap: Record<string, string> = {
+        "1": "Manhattan", "2": "Bronx", "3": "Brooklyn", "4": "Queens", "5": "Staten Island",
+      };
+      Promise.all([
+        // Pre-aggregated borough stats via RPC
+        (supabase as any).rpc("borough_avg_scores"),
+        // Peer avg by BIN
+        w?.bin ? (supabase as any)
           .from("buildings")
-          .select("borough, building_risk_scores!inner(risk_score)");
-        if (boroughData) {
-          const boroughMap: Record<string, { total: number; count: number }> = {};
-          const boroughNameMap: Record<string, string> = {
-            "1": "Manhattan", "2": "Bronx", "3": "Brooklyn", "4": "Queens", "5": "Staten Island",
-          };
-          for (const row of boroughData) {
-            const bName = boroughNameMap[String(row.borough)];
-            if (!bName) continue;
-            const scores = (row as any).building_risk_scores;
-            const score = Array.isArray(scores) ? scores[0]?.risk_score : scores?.risk_score;
-            if (score == null) continue;
-            if (!boroughMap[bName]) boroughMap[bName] = { total: 0, count: 0 };
-            boroughMap[bName].total += score;
-            boroughMap[bName].count += 1;
-          }
-          const stats: BoroughStat[] = Object.entries(boroughMap).map(([name, { total, count }]) => ({
-            name, avg_score: Math.round((total / count) * 10) / 10, count,
-          }));
+          .select("building_insights(inspection_days_peer_avg)")
+          .eq("bin", String(w.bin))
+          .single() : Promise.resolve({ data: null }),
+      ]).then(([boroughRes, peerRes]: any[]) => {
+        // Borough stats
+        if (boroughRes.data) {
+          const stats: BoroughStat[] = boroughRes.data.map((r: any) => ({
+            name: boroughNameMap[String(r.borough)] ?? String(r.borough),
+            avg_score: Math.round(Number(r.avg_score) * 10) / 10,
+            count: Number(r.count),
+          })).filter((s: BoroughStat) => s.name);
           setBoroughStats(stats);
         }
-      } catch (_) { /* borough stats optional */ }
+        // Peer avg
+        const peerRow = peerRes.data?.building_insights;
+        const peerAvg = Array.isArray(peerRow)
+          ? peerRow[0]?.inspection_days_peer_avg
+          : peerRow?.inspection_days_peer_avg;
+        if (peerAvg != null) {
+          setInsights(prev => prev ? { ...prev, inspection_days_peer_avg: Number(peerAvg) } : prev);
+        }
+      }).catch(() => { /* optional */ });
 
       // Compute insights client-side from window violation data
       try {
@@ -1487,25 +1492,6 @@ export default function ReportPage(_props: ReportPageProps) {
             multi_agency_count,
             long_open_count,
           });
-
-          // Fetch peer average from Supabase by BIN
-          try {
-            const bin = ww?.bin ? String(ww.bin) : null;
-            if (bin) {
-              const { data: peerData } = await (supabase as any)
-                .from("buildings")
-                .select("building_insights(inspection_days_peer_avg)")
-                .eq("bin", bin)
-                .single();
-              const peerRow = peerData?.building_insights;
-              const peerAvg = Array.isArray(peerRow)
-                ? peerRow[0]?.inspection_days_peer_avg
-                : peerRow?.inspection_days_peer_avg;
-              if (peerAvg != null) {
-                setInsights(prev => prev ? { ...prev, inspection_days_peer_avg: Number(peerAvg) } : prev);
-              }
-            }
-          } catch (_) { /* peer avg optional */ }
         }
       } catch (_) { /* insights optional */ }
     } catch (e: any) {
