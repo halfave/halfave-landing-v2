@@ -87,6 +87,7 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
         <div style={s.scoreBlock}>
           <div style={s.scoreEyebrow} className="eg-mono">Building Health Index</div>
           <div style={{ ...s.scoreNum, color: bucketColor }}>{score}</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: bucketColor, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4 }}>{String(building.risk_bucket ?? '').toUpperCase()}</div>
           <div style={s.scorePct}>Higher risk than {building.percentile ?? '—'}% of NYC buildings</div>
         </div>
 
@@ -186,8 +187,8 @@ const s: Record<string, React.CSSProperties> = {
 
   scoreBlock: { textAlign: 'center', flexShrink: 0, paddingBottom: 12 },
   scoreEyebrow: {
-    fontSize: 11, letterSpacing: '0.13em',
-    textTransform: 'uppercase', color: 'rgba(17,30,48,0.4)', marginBottom: 2,
+    fontSize: 12, letterSpacing: '0.1em', fontWeight: 600,
+    textTransform: 'uppercase', color: 'rgba(17,30,48,0.55)', marginBottom: 4,
   },
   scoreNum: { fontSize: 64, fontWeight: 500, lineHeight: 1, padding: '10px 0' },
   scorePct: { fontSize: 11, color: 'rgba(17,30,48,0.48)', marginTop: 4 },
