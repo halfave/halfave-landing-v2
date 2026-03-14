@@ -153,7 +153,9 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
           {error && <div style={s.error}>{error}</div>}
           <p style={s.privacy} className="eg-mono">
             We'll email you this report. No spam, no account required.
-          © 2026 Half Ave Company LLC. All rights reserved.
+          </p>
+          <p style={s.copyright} className="eg-mono">
+            © 2026 Half Ave Company LLC. All rights reserved.
           </p>
         </div>
 
@@ -177,7 +179,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: '12px', color: 'rgba(17,30,48,0.45)',
     background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
   },
-  logo: { height: 32, width: 'auto', display: 'block' },
+  logo: { height: 26, width: 'auto', display: 'block' },
   logoFallback: { fontFamily: 'var(--font-serif)', fontWeight: 600, fontSize: 15, color: 'var(--navy)' },
 
   body: {
@@ -188,10 +190,10 @@ const s: Record<string, React.CSSProperties> = {
 
   scoreBlock: { textAlign: 'center', flexShrink: 0, paddingBottom: 12 },
   scoreEyebrow: {
-    fontSize: 9, letterSpacing: '0.13em',
+    fontSize: 11, letterSpacing: '0.13em',
     textTransform: 'uppercase', color: 'rgba(17,30,48,0.4)', marginBottom: 2,
   },
-  scoreNum: { fontSize: 54, fontWeight: 500, lineHeight: 1, padding: '10px 0' },
+  scoreNum: { fontSize: 64, fontWeight: 500, lineHeight: 1, padding: '10px 0' },
   scorePct: { fontSize: 11, color: 'rgba(17,30,48,0.48)', marginTop: 4 },
 
   blurredWrap: {
@@ -260,6 +262,12 @@ const s: Record<string, React.CSSProperties> = {
     padding: '8px 12px', background: 'rgba(196,83,58,0.08)',
     border: '1px solid rgba(196,83,58,0.25)', borderRadius: 6,
     color: '#c4533a', fontFamily: 'var(--font-mono)', fontSize: 11,
+  },
+  copyright: {
+    fontSize: 9,
+    color: 'rgba(17,30,48,0.25)',
+    textAlign: 'center' as const,
+    lineHeight: 1.5,
   },
   privacy: {
     fontSize: 9.5,
