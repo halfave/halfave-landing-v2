@@ -688,58 +688,43 @@ function boroughScoreColor(score: number) {
 // ─── Accurate NYC Borough SVG Map ─────────────────────────────────────────────
 function BoroughMap({ stats, highlight }: { stats: BoroughStat[]; highlight?: string }) {
   const statMap = Object.fromEntries(stats.map((s) => [s.name, s]));
-
-  // Accurate pre-projected NYC borough paths (Mercator, viewBox 0 0 400 440)
-  const PATHS: Record<string, { d: string; lx: number; ly: number }> = {
-    Manhattan: {
-      d: "M215,28 L219,22 L225,18 L232,17 L238,20 L243,26 L246,34 L248,44 L249,56 L249,70 L248,84 L246,98 L244,112 L241,124 L238,134 L234,142 L229,148 L224,151 L219,148 L215,141 L212,130 L210,118 L209,104 L209,90 L209,76 L210,62 L212,48 Z",
-      lx: 229, ly: 90,
-    },
-    Bronx: {
-      d: "M215,28 L212,48 L210,62 L209,76 L200,74 L190,72 L180,70 L170,70 L160,72 L152,76 L147,82 L145,90 L146,98 L150,106 L157,112 L166,116 L176,117 L186,115 L196,111 L204,106 L209,100 L209,90 L210,76 L212,62 L214,46 L216,36 Z",
-      lx: 175, ly: 93,
-    },
-    Queens: {
-      d: "M248,112 L249,98 L249,84 L254,82 L262,80 L272,78 L283,78 L294,80 L304,84 L312,90 L317,98 L319,107 L318,116 L314,124 L307,131 L298,136 L288,140 L278,143 L268,146 L258,150 L250,154 L244,158 L240,162 L236,164 L232,162 L230,156 L230,148 L233,140 L238,134 L241,124 L244,112 Z",
-      lx: 278, ly: 118,
-    },
-    Brooklyn: {
-      d: "M232,162 L236,164 L240,162 L244,158 L250,154 L252,164 L252,174 L250,184 L246,194 L241,203 L235,211 L228,218 L220,222 L212,224 L204,222 L197,217 L192,210 L190,202 L190,193 L192,184 L196,175 L202,167 L208,160 L215,155 L222,153 L228,155 L230,156 L230,148 L233,140 L234,142 L229,148 L224,151 Z",
-      lx: 220, ly: 192,
-    },
-    "Staten Island": {
-      d: "M118,272 L126,264 L136,258 L148,255 L160,256 L170,260 L177,267 L181,276 L182,286 L180,296 L175,305 L167,312 L157,317 L146,319 L135,317 L125,312 L118,304 L114,294 L113,283 Z",
-      lx: 147, ly: 288,
-    },
+  // Label positions tuned to the Wikipedia NYC borough SVG (viewBox 0 0 549 540)
+  const LABELS: Record<string, { x: number; y: number }> = {
+    Manhattan:     { x: 270, y: 195 },
+    Bronx:         { x: 215, y: 125 },
+    Queens:        { x: 370, y: 230 },
+    Brooklyn:      { x: 290, y: 360 },
+    "Staten Island": { x: 110, y: 430 },
   };
 
   return (
-    <svg viewBox="0 0 400 440" className="rp-borough-map-svg" xmlns="http://www.w3.org/2000/svg">
-      {Object.entries(PATHS).map(([name, { d, lx, ly }]) => {
-        const stat = statMap[name];
-        const fillColor = stat ? boroughScoreColor(stat.avg_score) : "#cbd5e1";
-        const isHL = name === highlight;
-        return (
-          <g key={name}>
-            <path
-              d={d}
-              fill={fillColor}
-              fillOpacity={isHL ? 1 : 0.82}
-              stroke="white"
-              strokeWidth={isHL ? 2.5 : 1.5}
-            />
-            <text x={lx} y={ly - 7} className="rp-borough-label">
-              {name === "Staten Island" ? "SI" : name === "Manhattan" ? "MN" : name === "Brooklyn" ? "BK" : name === "Queens" ? "QN" : "BX"}
-            </text>
-            {stat && (
-              <text x={lx} y={ly + 6} className="rp-borough-score-label">
-                {stat.avg_score.toFixed(1)}
-              </text>
-            )}
-          </g>
-        );
-      })}
-    </svg>
+    <div style={{ position: "relative", width: 180, flexShrink: 0 }}>
+      <svg viewBox="0 0 549 540" style={{ width: "100%", height: "auto", display: "block" }}>
+        <image
+          href="https://pub-8148357eae8a439fa3a35df4c60df703.r2.dev/building/trio/New_York_City_Blank_Borough_Map.svg"
+          x="0" y="0" width="549" height="540"
+          style={{ opacity: 0.25 }}
+        />
+        {Object.entries(LABELS).map(([name, { x, y }]) => {
+          const stat = statMap[name];
+          if (!stat) return null;
+          const color = boroughScoreColor(stat.avg_score);
+          const isHL = name === highlight;
+          const abbr: Record<string,string> = { Manhattan:"MN", Bronx:"BX", Brooklyn:"BK", Queens:"QN", "Staten Island":"SI" };
+          return (
+            <g key={name}>
+              <circle cx={x} cy={y} r={isHL ? 22 : 18}
+                fill={color} fillOpacity={isHL ? 0.95 : 0.75}
+                stroke="white" strokeWidth={isHL ? 2 : 1} />
+              <text x={x} y={y - 4} textAnchor="middle" fontSize={isHL ? 9 : 8}
+                fontFamily="monospace" fill="white" fontWeight="700">{abbr[name]}</text>
+              <text x={x} y={y + 7} textAnchor="middle" fontSize={isHL ? 8 : 7}
+                fontFamily="monospace" fill="white">{stat.avg_score.toFixed(1)}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 }
 
