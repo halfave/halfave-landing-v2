@@ -55,7 +55,7 @@ function fmtCurrency(n?: number | null) {
 const CSS = `
   :root {
     --navy: #111e30;
-    --cream: #f7f4ef;
+    --cream: #ffffff;
     --bg: #ffffff;
     --risk-red: #c4533a;
     --risk-red-bg: #fdf0ed;
@@ -250,7 +250,7 @@ const CSS = `
     transition: background 0.15s;
   }
   .rp-driver:last-child { border-bottom: none; }
-  .rp-driver:hover { background: rgba(17,30,48,0.03); }
+  .rp-driver:hover { background: rgba(17,30,48,0.02); }
   .rp-driver-idx {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -414,7 +414,7 @@ const CSS = `
     transition: background 0.1s;
   }
   .rp-vtable tbody tr:last-child { border-bottom: none; }
-  .rp-vtable tbody tr:hover { background: rgba(17,30,48,0.03); }
+  .rp-vtable tbody tr:hover { background: rgba(17,30,48,0.02); }
   .rp-vtable tbody tr.expandable { cursor: pointer; }
   .rp-vtable td {
     padding: 10px 14px;
@@ -449,7 +449,7 @@ const CSS = `
   .rp-status-dot.open::before { background: var(--risk-red); }
   .rp-status-dot.closed::before { background: var(--risk-green); }
   .rp-expand-row td {
-    background: rgba(17,30,48,0.03);
+    background: rgba(17,30,48,0.02);
     padding: 0;
   }
   .rp-expand-inner {
