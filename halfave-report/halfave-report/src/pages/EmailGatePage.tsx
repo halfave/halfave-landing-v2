@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import type { Building } from '../types'
-import { RISK_COLORS } from '../types'
 
 interface Props {
   building: Building
@@ -24,9 +23,9 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
   const [sent, setSent] = useState(false)
 
   const _rawBucket = (building as any).risk_bucket ?? '';
+  const score = Math.round((building as any).health_score ?? building.risk_score ?? 0)
   const bucket = score >= 80 ? 'Healthy' : score >= 60 ? 'Good' : score >= 40 ? 'Fair' : 'Watch';
   const bucketColor = score >= 80 ? '#3a7d5e' : score >= 60 ? '#c9a227' : '#c4533a';
-  const score = Math.round((building as any).health_score ?? building.risk_score ?? 0)
   const addr = building.address || 'this building'
 
   async function handleSubmit() {
