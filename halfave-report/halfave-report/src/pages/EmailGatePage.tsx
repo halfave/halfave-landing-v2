@@ -23,8 +23,10 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
 
-  const bucketColor = RISK_COLORS[building.risk_bucket ?? ''] ?? '#7a8fa6'
-  const score = Math.round(building.risk_score ?? 0)
+  const _rawBucket = (building as any).risk_bucket ?? '';
+  const bucket = score >= 80 ? 'Healthy' : score >= 60 ? 'Good' : score >= 40 ? 'Fair' : 'Watch';
+  const bucketColor = score >= 80 ? '#3a7d5e' : score >= 60 ? '#c9a227' : '#c4533a';
+  const score = Math.round((building as any).health_score ?? building.risk_score ?? 0)
   const addr = building.address || 'this building'
 
   async function handleSubmit() {
@@ -87,8 +89,8 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
         <div style={s.scoreBlock}>
           <div style={s.scoreEyebrow} className="eg-mono">Building Health Index</div>
           <div style={{ ...s.scoreNum, color: bucketColor }}>{score}</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: bucketColor, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4 }}>{String(building.risk_bucket ?? '').toUpperCase()}</div>
-          <div style={s.scorePct}>Higher risk than {building.percentile ?? '—'}% of NYC buildings</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: bucketColor, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4 }}>{bucket}</div>
+          <div style={s.scorePct}>Higher than {building.percentile ?? '—'}% of NYC buildings</div>
         </div>
 
         {/* Blurred report preview */}
@@ -241,7 +243,7 @@ const s: Record<string, React.CSSProperties> = {
   lockTitle: { fontSize: 13, fontWeight: 600, color: '#111e30', textAlign: 'left', lineHeight: 1.4 },
   bullets: { listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 },
   bullet: { fontSize: 11, color: 'rgba(17,30,48,0.62)', display: 'flex', alignItems: 'flex-start', gap: 7, lineHeight: 1.4 },
-  bulletDot: { color: '#c4533a', flexShrink: 0, fontWeight: 700 },
+  bulletDot: { color: '#111e30', flexShrink: 0, fontWeight: 700 },
 
   bottom: { flexShrink: 0, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 7 },
   emailIn: {
