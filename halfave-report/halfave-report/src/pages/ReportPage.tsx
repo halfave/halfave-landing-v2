@@ -23,6 +23,7 @@ interface Building {
 }
 
 interface RiskScore {
+  health_score?: number;
   risk_score: number;
   risk_bucket: string;
   percentile: number;
