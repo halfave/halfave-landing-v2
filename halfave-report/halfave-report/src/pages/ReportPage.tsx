@@ -2,15 +2,64 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ─── Supabase ────────────────────────────────────────────────────────────────
-const SUPA_URL = "https://mjkkzniagexfooclqsjr.supabase.co";
-const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qa2t6bmlhZ2V4Zm9vY2xxc2pyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3NDc4OTUsImV4cCI6MjA4NjMyMzg5NX0.RuaeazBn_IFWfXOlQ0ZDDTPsnTApNGmE_WpPi0o52gQ";
-const supabase = createClient(SUPA_URL, SUPA_KEY).schema("analytics");
+const supabase = createClient(
+  "https://mjkkzniagexfooclqsjr.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qa2t6bmlhZ2V4Zm9vY2xxc2pyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3NDc4OTUsImV4cCI6MjA4NjMyMzg5NX0.RuaeazBn_IFWfXOlQ0ZDDTPsnTApNGmE_WpPi0o52gQ"
+).schema("analytics");
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-import type { Building, RiskScore, BuildingFeatures, Violation, BoroughStat, HalfaveWindow, HalfaveBldgWindow } from "../types";
+interface Building {
+  id: string;
+  bin?: number | string | null;
+  bbl?: string | null;
+  address: string;
+  borough?: number | string | null;
+  stories?: number | null;
+  unit_count?: number | null;
+  year_built?: number | null;
+  zipcode?: string | null;
+  management_program?: string | null;
+  slug?: string;
+}
 
-// ─── Local Types ─────────────────────────────────────────────────────────────
-type OwnershipStat = { ownership: string; avg_score: number; count: number };
+interface RiskScore {
+  risk_score: number;
+  risk_bucket: string;
+  percentile: number;
+  top_drivers?: { drivers: string[] };
+}
+
+interface BuildingFeatures {
+  open_violations: number;
+  recent_12m_violations: number;
+  severity_points: number;
+  avg_open_age_days: number;
+  violation_density: number;
+  avg_resolution_days: number;
+  resolution_rate: number;
+  expired_tco: boolean;
+  boiler_count: number;
+  boiler_avg_missed_years: number;
+  elevator_count: number;
+  elevator_avg_missed_years: number;
+}
+
+interface Violation {
+  id: string;
+  agency: "HPD" | "DOB" | "ECB";
+  source: string;
+  severity?: string;
+  violation_type?: string;
+  description?: string;
+  is_open: boolean;
+  issue_date?: string;
+  close_date?: string;
+  violation_code?: string;
+  order_number?: string;
+  balance_due?: number;
+  penalty_amount?: number;
+  disposition?: string;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const BOROUGH_NAMES: Record<string, string> = {
@@ -29,7 +78,57 @@ const BOROUGH_NAMES: Record<string, string> = {
 function getBoroughName(b?: number | string | null) {
   if (!b) return "NYC";
   return BOROUGH_NAMES[String(b)] ?? "NYC";
-}function fmtCurrency(n?: number | null) {
+}
+
+function riskColor(score: number) {
+  if (score >= 80) return "var(--risk-green)";
+  if (score >= 60) return "var(--risk-amber)";
+  return "var(--risk-red)";
+}
+
+function riskBg(score: number) {
+  if (score >= 80) return "var(--risk-green-bg)";
+  if (score >= 60) return "var(--risk-amber-bg)";
+  return "var(--risk-red-bg)";
+}
+
+function severityWeight(s?: string) {
+  if (!s) return 0;
+  const u = s.toUpperCase();
+  if (u === "C" || u === "CLASS - 1") return 3;
+  if (u === "B" || u === "CLASS - 2") return 2;
+  return 1;
+}
+
+function severityLabel(s?: string, agency?: string) {
+  if (!s) return "–";
+  if (agency === "HPD") return `Class ${s}`;
+  if (s.startsWith("CLASS")) return s.replace("CLASS - ", "ECB Class ");
+  return s;
+}
+
+function severityColor(s?: string) {
+  const u = (s ?? "").toUpperCase();
+  if (u === "C" || u === "CLASS - 1") return "#c4533a";
+  if (u === "B" || u === "CLASS - 2") return "#d97b3a";
+  return "#c9a227";
+}
+
+function fmt(n?: number | null, fallback = "–") {
+  if (n == null) return fallback;
+  return n.toLocaleString();
+}
+
+function fmtDate(d?: string | null) {
+  if (!d) return "–";
+  return new Date(d).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function fmtCurrency(n?: number | null) {
   if (!n) return "–";
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
 }
@@ -38,8 +137,8 @@ function getBoroughName(b?: number | string | null) {
 const CSS = `
   :root {
     --navy: #111e30;
-    --cream: #ffffff;
-    --bg: #ffffff;
+    --cream: #f7f4ef;
+    --bg: #f0ede8;
     --risk-red: #c4533a;
     --risk-red-bg: #fdf0ed;
     --risk-amber: #c9a227;
@@ -50,13 +149,12 @@ const CSS = `
     --navy-10: rgba(17,30,48,0.08);
     --navy-20: rgba(17,30,48,0.15);
     --font-serif: 'Lora', Georgia, serif;
-    --font-sans:  'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --font-mono:  'DM Mono', 'Courier New', monospace;
+    --font-mono: 'DM Mono', 'Courier New', monospace;
     --radius: 12px;
     --radius-lg: 16px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--navy); font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  body { background: var(--bg); color: var(--navy); font-family: var(--font-serif); }
 
   .rp-root { min-height: 100vh; background: var(--bg); }
 
@@ -76,7 +174,7 @@ const CSS = `
   }
   .rp-hero-inner { max-width: 860px; margin: 0 auto; position: relative; }
   .rp-hero-eyebrow {
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -84,7 +182,7 @@ const CSS = `
     margin-bottom: 12px;
   }
   .rp-hero-address {
-    font-family: 'Lora', Georgia, serif;
+    font-family: var(--font-serif);
     font-size: clamp(22px, 4vw, 34px);
     font-weight: 700;
     color: #fff;
@@ -92,7 +190,7 @@ const CSS = `
     margin-bottom: 6px;
   }
   .rp-hero-meta {
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     color: var(--slate);
     margin-bottom: 36px;
@@ -123,21 +221,21 @@ const CSS = `
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 30px;
     font-weight: 700;
     border: 3px solid;
     position: relative;
   }
   .rp-score-label {
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--slate);
   }
   .rp-score-badge {
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.06em;
@@ -157,14 +255,14 @@ const CSS = `
     border-right: 1px solid rgba(255,255,255,0.08);
   }
   .rp-kpi-val {
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 28px;
     font-weight: 700;
     color: #fff;
     line-height: 1;
   }
   .rp-kpi-lbl {
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     color: var(--slate);
     margin-top: 4px;
@@ -197,7 +295,7 @@ const CSS = `
   /* ── SECTION ── */
   .rp-section { margin-bottom: 40px; }
   .rp-section-title {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-mono);
     font-size: 11px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -233,9 +331,9 @@ const CSS = `
     transition: background 0.15s;
   }
   .rp-driver:last-child { border-bottom: none; }
-  .rp-driver:hover { background: rgba(17,30,48,0.02); }
+  .rp-driver:hover { background: rgba(17,30,48,0.03); }
   .rp-driver-idx {
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     color: var(--slate);
     width: 20px;
@@ -253,7 +351,7 @@ const CSS = `
     flex-shrink: 0;
   }
   .rp-driver-text {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-serif);
     font-size: 14px;
     color: var(--navy);
     line-height: 1.4;
@@ -274,14 +372,14 @@ const CSS = `
     padding: 18px 20px;
   }
   .rp-stat-val {
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 22px;
     font-weight: 700;
     color: var(--navy);
     line-height: 1;
   }
   .rp-stat-lbl {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-mono);
     font-size: 11px;
     color: var(--slate);
     margin-top: 5px;
@@ -304,7 +402,7 @@ const CSS = `
     width: fit-content;
   }
   .rp-tab-btn {
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.06em;
@@ -353,13 +451,13 @@ const CSS = `
     text-align: center;
   }
   .rp-vsum-num {
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 20px;
     font-weight: 700;
     line-height: 1;
   }
   .rp-vsum-lbl {
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     color: var(--slate);
     margin-top: 3px;
@@ -376,7 +474,7 @@ const CSS = `
   }
   .rp-vtable { width: 100%; border-collapse: collapse; }
   .rp-vtable thead th {
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -397,19 +495,18 @@ const CSS = `
     transition: background 0.1s;
   }
   .rp-vtable tbody tr:last-child { border-bottom: none; }
-  .rp-vtable tbody tr:hover { background: rgba(17,30,48,0.02); }
+  .rp-vtable tbody tr:hover { background: rgba(17,30,48,0.03); }
   .rp-vtable tbody tr.expandable { cursor: pointer; }
   .rp-vtable td {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important; font-size: 13px;
     padding: 10px 14px;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-mono);
     font-size: 12px;
     color: var(--navy);
     vertical-align: top;
   }
   .rp-sev-badge {
     display: inline-block;
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     font-weight: 700;
     padding: 2px 7px;
@@ -433,12 +530,12 @@ const CSS = `
   .rp-status-dot.open::before { background: var(--risk-red); }
   .rp-status-dot.closed::before { background: var(--risk-green); }
   .rp-expand-row td {
-    background: rgba(17,30,48,0.02);
+    background: rgba(17,30,48,0.03);
     padding: 0;
   }
   .rp-expand-inner {
     padding: 14px 20px;
-    font-family: 'Lora', Georgia, serif;
+    font-family: var(--font-serif);
     font-size: 13px;
     line-height: 1.6;
     color: var(--navy);
@@ -448,7 +545,7 @@ const CSS = `
   }
   .rp-expand-field { display: flex; flex-direction: column; gap: 2px; }
   .rp-expand-key {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-mono);
     font-size: 10px;
     color: var(--slate);
     text-transform: uppercase;
@@ -466,7 +563,7 @@ const CSS = `
     display: block;
     width: 100%;
     padding: 12px;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-mono);
     font-size: 12px;
     letter-spacing: 0.06em;
     background: var(--bg);
@@ -492,7 +589,7 @@ const CSS = `
   .rp-alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
   .rp-alert-body {}
   .rp-alert-title {
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
@@ -500,12 +597,12 @@ const CSS = `
     margin-bottom: 3px;
   }
   .rp-alert-body p {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-serif);
     font-size: 13px;
     line-height: 1.5;
   }
-  .rp-alert.red { background: var(--risk-red-bg); border-color: rgba(196,83,58,0.25); color: var(--risk-red); }
-  .rp-alert.amber { background: var(--risk-amber-bg); border-color: rgba(201,162,39,0.25); color: #9a7a1a; }
+  .rp-alert.red { background: var(--risk-red-bg); border-color: rgba(196,83,58,0.25); color: #1a1a1a; }
+  .rp-alert.amber { background: var(--risk-amber-bg); border-color: rgba(201,162,39,0.25); color: #1a1a1a; }
 
   /* ── PEER BARS ── */
   .rp-peer-row {
@@ -519,12 +616,12 @@ const CSS = `
     margin-bottom: 6px;
   }
   .rp-peer-name {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-mono);
     font-size: 12px;
     color: var(--navy);
   }
   .rp-peer-val {
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     font-weight: 700;
     color: var(--navy);
@@ -560,7 +657,7 @@ const CSS = `
     flex-direction: column;
     gap: 16px;
     color: var(--slate);
-    font-family: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-size: 13px;
     letter-spacing: 0.08em;
   }
@@ -574,367 +671,248 @@ const CSS = `
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ── BOROUGH MAP ── */  .rp-borough-map-svg { width: 180px; height: auto; flex-shrink: 0; }  .rp-borough-path:hover { opacity: 0.85; }  .rp-borough-score-label {
-    font-family: 'DM Mono', 'Courier New', monospace;
-    font-size: 11px;
-    font-weight: 700;
-    fill: rgba(255,255,255,0.95);
-    text-anchor: middle;
-    pointer-events: none;
-  }  .rp-borough-bar-row {
-    display: grid;
-    grid-template-columns: 90px 1fr 52px 60px;
-    align-items: center;
-    gap: 10px;
-    padding: 11px 0;
-    border-bottom: 1px solid var(--navy-10);
-  }  .rp-borough-bar-name {
-    font-family: 'DM Mono', 'Courier New', monospace;
-    font-size: 12px;
-    color: var(--navy);
-  }  .rp-borough-bar-fill {
-    height: 100%;
-    border-radius: 3px;
-  }  .rp-borough-bar-count {
-    font-family: 'DM Mono', 'Courier New', monospace;
-    font-size: 10px;
-    color: var(--slate);
-    text-align: right;
-  }  .rp-borough-legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-family: 'DM Mono', 'Courier New', monospace;
-    font-size: 11px;
-    color: var(--slate);
-  }  @media (max-width: 680px) {
-    .rp-borough-wrap { grid-template-columns: 1fr; }
-  }
-
   @media (max-width: 600px) {
     .rp-kpi-row { flex-wrap: wrap; }
     .rp-kpi { padding: 0 16px; margin-bottom: 16px; }
     .rp-vsummary { grid-template-columns: repeat(2, 1fr); }
     .rp-expand-inner { grid-template-columns: 1fr; }
     .rp-stats-grid { grid-template-columns: repeat(2, 1fr); }
-    .rp-insights-grid { grid-template-columns: 1fr !important; }
   }
 `;
 
-// ─── Borough data ─────────────────────────────────────────────────────────────
-
-function boroughScoreColor(score: number) {
-  if (score >= 35) return "#c4533a";
-  if (score >= 20) return "#c9a227";
-  return "#3a7d5e";
-}
-
 // ─── Driver icon/color map ────────────────────────────────────────────────────
-
-
-
-
-// ─── Violation + Inspection Tabs ─────────────────────────────────────────────
-type VTab = "HPD" | "DOB" | "ECB_OATH" | "Inspections" | "TCO";
-const VTAB_LABELS: Record<VTab, string> = {
-  HPD: "HPD", DOB: "DOB", ECB_OATH: "ECB / OATH", Inspections: "Inspections", TCO: "TCO",
-};
-
-function fmtDate(d: string | null | undefined): string {
-  if (!d) return "—";
-  try {
-    if (/^\d{8}$/.test(d)) d = `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
-    const dt = new Date(d);
-    return isNaN(dt.getTime()) ? d.slice(0,10) : dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  } catch { return d.slice(0,10); }
+function driverMeta(d: string): { icon: string; bg: string; color: string } {
+  const dl = d.toLowerCase();
+  if (dl.includes("boiler")) return { icon: "🔥", bg: "#fdf0ed", color: "#c4533a" };
+  if (dl.includes("elevator") || dl.includes("lift")) return { icon: "🏗️", bg: "#fdf0ed", color: "#c4533a" };
+  if (dl.includes("tco") || dl.includes("certificate")) return { icon: "📋", bg: "#fdf8ec", color: "#c9a227" };
+  if (dl.includes("open violation") || dl.includes("count")) return { icon: "⚠️", bg: "#fdf0ed", color: "#c4533a" };
+  if (dl.includes("recent") || dl.includes("12m") || dl.includes("trend")) return { icon: "📈", bg: "#fdf8ec", color: "#c9a227" };
+  if (dl.includes("age") || dl.includes("days")) return { icon: "🕐", bg: "#fdf8ec", color: "#c9a227" };
+  if (dl.includes("density")) return { icon: "📊", bg: "#fdf0ed", color: "#c4533a" };
+  if (dl.includes("severity") || dl.includes("class c") || dl.includes("class a")) return { icon: "🚨", bg: "#fdf0ed", color: "#c4533a" };
+  if (dl.includes("resolution") || dl.includes("resolve")) return { icon: "⏱️", bg: "#fdf8ec", color: "#c9a227" };
+  if (dl.includes("penalty") || dl.includes("balance") || dl.includes("fine")) return { icon: "💰", bg: "#fdf8ec", color: "#c9a227" };
+  return { icon: "⚡", bg: "#f0ede8", color: "#7a8fa6" };
 }
 
-interface UnifiedViolation {
-  id: string;
-  source: string;
-  cls?: string;
-  desc: string;
-  date: string;
-  balance?: number | null;
-  link?: string;
-}
+// ─── Violation Row ─────────────────────────────────────────────────────────────
+function ViolationRow({ v, expanded, onToggle }: {
+  v: Violation;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const sc = severityColor(v.severity);
+  const hasDetail = !!(v.description || v.order_number || v.penalty_amount || v.balance_due || v.disposition);
 
-function normalizeHPDClass(cls: string): string {
-  // HPD raw API uses first char of severity label: I=Immediately hazardous=C, H=Hazardous=B, L=Low/Non-hazardous=A
-  if (cls === "I") return "C";
-  if (cls === "H") return "B";
-  if (cls === "L") return "A";
-  return cls; // already A/B/C or empty
-}
-
-function toUV(arr: any[], source: string, open: boolean): UnifiedViolation[] {
-  if (!open) return [];
-  return (arr || []).map((v: any) => ({
-    id: v.id || "",
-    source,
-    cls: source === "HPD" ? normalizeHPDClass(v.cls || "") : (v.cls || ""),
-    desc: v.desc || v.description || "",
-    date: v.date || v.issue_date || v.violation_date || "",
-    balance: (v.penalty != null && Number(v.penalty) !== 0) ? Number(v.penalty) : null,
-    link: v.link || undefined,
-  }));
-}
-
-function sortByDate(a: UnifiedViolation, b: UnifiedViolation) {
-  return (b.date || "").localeCompare(a.date || "");
-}
-
-interface InspectionItem {
-  id: string;
-  type: string;
-  desc: string;
-  date: string;
-  status: string;
-}
-
-interface TcoItem {
-  type: string;
-  date: string;
-  expiry: string;
-  expired: boolean;
-}
-
-function ClsBadge({ cls, source }: { cls?: string; source: string }) {
-  if (source === "HPD" && cls) {
-    const bg = cls === "C" ? "#fde8e4" : cls === "B" ? "#fef3e2" : "#f0f4f8";
-    const col = cls === "C" ? "#c4533a" : cls === "B" ? "#d97b3a" : "#7a8fa6";
-    return <span style={{ display:"inline-block", padding:"1px 6px", borderRadius:4, fontSize:10, fontWeight:700, fontFamily:"'DM Mono', monospace", background:bg, color:col }}>Class {cls}</span>;
-  }
-  const labels: Record<string,string> = { DOB:"DOB", ECB:"ECB", OATH:"OATH", DSNY:"DSNY", DOHMH:"HLTH", NYPD:"NYPD" };
-  const bgs: Record<string,string> = { DOB:"#eff6ff", ECB:"#fef3c7", OATH:"#fef3c7", DSNY:"#ecfdf5", DOHMH:"#fef3c7", NYPD:"#eff6ff" };
-  const cols: Record<string,string> = { DOB:"#1d4ed8", ECB:"#b45309", OATH:"#b45309", DSNY:"#059669", DOHMH:"#b45309", NYPD:"#1d4ed8" };
-  const lbl = labels[source] || source;
-  return <span style={{ display:"inline-block", padding:"1px 6px", borderRadius:4, fontSize:10, fontWeight:700, fontFamily:"'DM Mono', monospace", background:bgs[source]||"#f0f4f8", color:cols[source]||"#7a8fa6" }}>{lbl}</span>;
-}
-
-function ViolRow({ v }: { v: UnifiedViolation }) {
-  const [open, setOpen] = useState(false);
   return (
-    <tr className="rp-vrow" onClick={() => setOpen(o => !o)} style={{ cursor:"pointer" }}>
-      <td className="rp-vtd rp-vtd-badge"><ClsBadge cls={v.cls} source={v.source} /></td>
-      <td className="rp-vtd rp-vtd-desc">
-        <div style={{ fontWeight:500, fontSize:13, color:"var(--navy)", lineHeight:1.4, fontFamily:"'Inter', -apple-system, sans-serif" }}>
-          {v.id && <span style={{ fontFamily:"'DM Mono', monospace", fontSize:10, color:"var(--slate)", marginRight:6 }}>#{v.id}</span>}
-          {(v.desc || "No description").slice(0, open ? 9999 : 160)}{!open && (v.desc||"").length > 160 ? "…" : ""}
-        </div>
-        {v.balance && v.balance > 0 && (
-          <div style={{ fontSize:11, color:"#b45309", fontWeight:600, marginTop:2, fontFamily:"'DM Mono', monospace" }}>
-            Balance: ${v.balance.toLocaleString()}
-          </div>
-        )}
-      </td>
-      <td className="rp-vtd rp-vtd-date" style={{ fontFamily:"'DM Mono', monospace", fontSize:11, color:"var(--slate)", whiteSpace:"nowrap" }}>
-        {fmtDate(v.date)}
-      </td>
-    </tr>
+    <>
+      <tr className={hasDetail ? "expandable" : ""} onClick={hasDetail ? onToggle : undefined}>
+        <td>
+          <span
+            className="rp-sev-badge"
+            style={{ background: sc + "22", color: sc }}
+          >
+            {severityLabel(v.severity, v.agency)}
+          </span>
+        </td>
+        <td style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {v.violation_type || v.description?.slice(0, 60) || "–"}
+        </td>
+        <td>
+          <span className={`rp-status-dot ${v.is_open ? "open" : "closed"}`}>
+            {v.is_open ? "Open" : "Closed"}
+          </span>
+        </td>
+        <td style={{ color: "var(--slate)" }}>{fmtDate(v.issue_date)}</td>
+        <td style={{ textAlign: "right" }}>
+          {hasDetail && (
+            <span style={{ color: "var(--slate)", fontSize: 10 }}>
+              {expanded ? "▲" : "▼"}
+            </span>
+          )}
+        </td>
+      </tr>
+      {expanded && hasDetail && (
+        <tr className="rp-expand-row">
+          <td colSpan={5}>
+            <div className="rp-expand-inner">
+              {v.description && (
+                <div className="rp-expand-field rp-expand-desc">
+                  <span className="rp-expand-key">Description</span>
+                  <span>{v.description}</span>
+                </div>
+              )}
+              {v.order_number && (
+                <div className="rp-expand-field">
+                  <span className="rp-expand-key">Order #</span>
+                  <span>{v.order_number}</span>
+                </div>
+              )}
+              {v.violation_code && (
+                <div className="rp-expand-field">
+                  <span className="rp-expand-key">Code</span>
+                  <span>{v.violation_code}</span>
+                </div>
+              )}
+              {v.penalty_amount != null && (
+                <div className="rp-expand-field">
+                  <span className="rp-expand-key">Penalty</span>
+                  <span>{fmtCurrency(v.penalty_amount)}</span>
+                </div>
+              )}
+              {v.balance_due != null && (
+                <div className="rp-expand-field">
+                  <span className="rp-expand-key">Balance Due</span>
+                  <span style={{ color: v.balance_due > 0 ? "var(--risk-red)" : undefined }}>
+                    {fmtCurrency(v.balance_due)}
+                  </span>
+                </div>
+              )}
+              {v.disposition && (
+                <div className="rp-expand-field">
+                  <span className="rp-expand-key">Disposition</span>
+                  <span>{v.disposition}</span>
+                </div>
+              )}
+              {v.close_date && (
+                <div className="rp-expand-field">
+                  <span className="rp-expand-key">Closed</span>
+                  <span>{fmtDate(v.close_date)}</span>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
-function OpenViolationTabs(_props: { violations: Violation[]; elevators: any[]; boilers: any[]; co: any | null }) {
-  const w = (window as any).__halfaveBldg || {};
-  const vw = w.violations || {};
+// ─── Violation Tabs ────────────────────────────────────────────────────────────
+type SortKey = "severity" | "issue_date" | "is_open" | "violation_type";
 
-  // Build per-tab items from window raw data (richer than the Violation[] which lost source detail)
-  const hpdItems: UnifiedViolation[] = [
-    ...toUV(vw.hpd?.open || [], "HPD", true),
-  ].sort(sortByDate);
+function ViolationTabs({ violations }: { violations: Violation[] }) {
+  const [tab, setTab] = useState<"HPD" | "DOB" | "ECB">("HPD");
+  const [sortKey, setSortKey] = useState<SortKey>("severity");
+  const [sortAsc, setSortAsc] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(20);
 
-  const dobItems: UnifiedViolation[] = [
-    ...toUV(vw.dob?.open || [], "DOB", true),
-  ].sort(sortByDate);
-
-  const ecbOathItems: UnifiedViolation[] = [
-    ...toUV(vw.ecb?.open || [], "ECB", true),
-    ...toUV((vw.oath || []).filter((v: any) => {
-      const d = (v.disposition || "").toUpperCase();
-      return !d.includes("DISMISS") && d !== "PAID IN FULL" && d !== "PAID";
-    }), "OATH", true),
-    ...toUV((vw.sanitation || []).filter((v: any) => parseFloat(v.balance_due ?? "0") > 0), "DSNY", true),
-    ...toUV((vw.dohmh || []).filter((v: any) => parseFloat(v.balance_due ?? "0") > 0), "DOHMH", true),
-    ...toUV((vw.nypd || []).filter((v: any) => parseFloat(v.balance_due ?? "0") > 0), "NYPD", true),
-  ].sort(sortByDate);
-
-  // Inspections: elevators with overdue CAT1 or PVT, boilers not accepted
-  const cutoff = new Date("2025-01-01");
-  const inspItems: InspectionItem[] = [];
-  const allElev = w.elevators || [];
-  for (const d of allElev) {
-    const id = (d.device_number || d.devicenumber || "—").toString();
-    const catRaw = d.cat1_latest_report_filed || d.cat1_latest_report_filed_date || "";
-    const pvtRaw = d.periodic_latest_inspection || d.periodic_latest_inspection_date || "";
-    if (catRaw && new Date(catRaw) < cutoff) {
-      inspItems.push({ id, type: "Elevator CAT1", desc: `Device #${id} — CAT1 inspection overdue`, date: catRaw, status: "Overdue" });
-    }
-    if (pvtRaw && new Date(pvtRaw) < cutoff) {
-      inspItems.push({ id: id + "-pvt", type: "Elevator PVT", desc: `Device #${id} — Periodic inspection overdue`, date: pvtRaw, status: "Overdue" });
-    }
-  }
-  const allBoilers = w.boilers || [];
-  for (const d of allBoilers) {
-    if ((d.report_status || "").toLowerCase() !== "accepted") {
-      const id = (d.boiler_id || d.boilerid || "—").toString();
-      inspItems.push({ id, type: "Boiler", desc: `Boiler #${id} — inspection not accepted`, date: d.inspection_date || "", status: d.report_status || "Not accepted" });
-    }
-  }
-  inspItems.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-
-  // TCO
-  const tcoItems: TcoItem[] = [];
-  const coData = w.co;
-  if (coData) {
-    const coType = (coData.c_of_o_filing_type || coData.certtype || coData.co_type || "").toLowerCase();
-    const isFinal = coType.includes("final");
-    if (!isFinal) {
-      const issuedRaw = coData.c_of_o_issuance_date || coData.co_issue_date || coData.issue_date || "";
-      let expiryStr = "";
-      let expired = false;
-      if (issuedRaw) {
-        const expDate = new Date(issuedRaw);
-        expDate.setMonth(expDate.getMonth() + 3);
-        expiryStr = fmtDate(expDate.toISOString());
-        expired = new Date() > expDate;
-      }
-      tcoItems.push({ type: coType || "Temporary CO", date: issuedRaw, expiry: expiryStr, expired });
-    }
-  }
-
-  const counts: Record<VTab, number> = {
-    HPD: hpdItems.length,
-    DOB: dobItems.length,
-    ECB_OATH: ecbOathItems.length,
-    Inspections: inspItems.length,
-    TCO: tcoItems.length,
+  const byAgency = {
+    HPD: violations.filter((v) => v.agency === "HPD"),
+    DOB: violations.filter((v) => v.agency === "DOB"),
+    ECB: violations.filter((v) => v.agency === "ECB"),
   };
 
-  const activeTabs = (["HPD","DOB","ECB_OATH","Inspections","TCO"] as VTab[]).filter(t => counts[t] > 0);
-  const [tab, setTab] = useState<VTab>(activeTabs[0] ?? "HPD");
-  const [page, setPage] = useState(25);
+  const current = byAgency[tab];
+  const open = current.filter((v) => v.is_open);
+  const closed = current.filter((v) => !v.is_open);
 
-  const total = hpdItems.length + dobItems.length + ecbOathItems.length + inspItems.length + tcoItems.length;
+  const sorted = [...current].sort((a, b) => {
+    let cmp = 0;
+    if (sortKey === "severity") cmp = severityWeight(b.severity) - severityWeight(a.severity);
+    else if (sortKey === "issue_date") cmp = (b.issue_date ?? "").localeCompare(a.issue_date ?? "");
+    else if (sortKey === "is_open") cmp = (b.is_open ? 1 : 0) - (a.is_open ? 1 : 0);
+    else if (sortKey === "violation_type") cmp = (a.violation_type ?? "").localeCompare(b.violation_type ?? "");
+    return sortAsc ? -cmp : cmp;
+  });
 
-  if (total === 0) {
-    return (
-      <div style={{ padding:"32px 20px", textAlign:"center", fontFamily:"'Inter', -apple-system, sans-serif", fontSize:13, color:"var(--slate)" }}>
-        No open violations or outstanding items on record
-      </div>
-    );
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortAsc(!sortAsc);
+    else { setSortKey(key); setSortAsc(false); }
+    setPage(20);
   }
+
+  function toggleExpand(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  const th = (label: string, key: SortKey) => (
+    <th
+      className={sortKey === key ? "sorted" : ""}
+      onClick={() => toggleSort(key)}
+    >
+      {label}
+      <span className="sort-arrow">{sortKey === key ? (sortAsc ? "↑" : "↓") : "↕"}</span>
+    </th>
+  );
+
+  const tabs: ("HPD" | "DOB" | "ECB")[] = ["HPD", "DOB", "ECB"];
 
   return (
     <div>
       <div className="rp-tabs-nav">
-        {activeTabs.map(t => (
-          <button key={t} className={`rp-tab-btn ${tab === t ? "active" : ""}`}
-            onClick={() => { setTab(t); setPage(25); }}>
-            {VTAB_LABELS[t]}
-            <span className="rp-tab-count">{counts[t]}</span>
+        {tabs.map((t) => (
+          <button
+            key={t}
+            className={`rp-tab-btn ${tab === t ? "active" : ""}`}
+            onClick={() => { setTab(t); setPage(20); }}
+          >
+            {t}
+            <span className="rp-tab-count">{byAgency[t].length}</span>
           </button>
         ))}
       </div>
 
-      <div className="rp-vtable-wrap">
-        {tab === "HPD" && (
-          <table className="rp-vtable">
-            <thead><tr>
-              <th style={{width:70}}>Class</th>
-              <th>Description</th>
-              <th style={{width:100}}>Issued</th>
-            </tr></thead>
-            <tbody>{hpdItems.slice(0,page).map((v,i) => <ViolRow key={i} v={v} />)}</tbody>
-          </table>
-        )}
-        {tab === "DOB" && (
-          <table className="rp-vtable">
-            <thead><tr>
-              <th style={{width:70}}>Source</th>
-              <th>Description</th>
-              <th style={{width:100}}>Issued</th>
-            </tr></thead>
-            <tbody>{dobItems.slice(0,page).map((v,i) => <ViolRow key={i} v={v} />)}</tbody>
-          </table>
-        )}
-        {tab === "ECB_OATH" && (
-          <table className="rp-vtable">
-            <thead><tr>
-              <th style={{width:70}}>Source</th>
-              <th>Description</th>
-              <th style={{width:100}}>Issued</th>
-            </tr></thead>
-            <tbody>{ecbOathItems.slice(0,page).map((v,i) => <ViolRow key={i} v={v} />)}</tbody>
-          </table>
-        )}
-        {tab === "Inspections" && (
-          <table className="rp-vtable">
-            <thead><tr>
-              <th style={{width:110}}>Type</th>
-              <th>Description</th>
-              <th style={{width:100}}>Last Inspection</th>
-            </tr></thead>
-            <tbody>
-              {inspItems.slice(0,page).map((item,i) => (
-                <tr key={i} className="rp-vrow">
-                  <td className="rp-vtd rp-vtd-badge">
-                    <span style={{ display:"inline-block", padding:"1px 6px", borderRadius:4, fontSize:10, fontWeight:700, fontFamily:"'DM Mono', monospace", background:"#fef2f2", color:"#c4533a" }}>
-                      {item.type.includes("Elevator") ? "ELEV" : "BOILER"}
-                    </span>
-                  </td>
-                  <td className="rp-vtd rp-vtd-desc">
-                    <div style={{ fontWeight:500, fontSize:13, color:"var(--navy)" }}>{item.desc}</div>
-                    <div style={{ fontSize:11, color:"#c4533a", fontWeight:600, fontFamily:"'DM Mono', monospace", marginTop:2 }}>{item.status}</div>
-                  </td>
-                  <td className="rp-vtd rp-vtd-date" style={{ fontFamily:"'DM Mono', monospace", fontSize:11, color:"var(--slate)", whiteSpace:"nowrap" }}>
-                    {fmtDate(item.date)}
-                  </td>
+      {current.length === 0 ? (
+        <div style={{ padding: "32px 20px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--slate)" }}>
+          No {tab} violations on record
+        </div>
+      ) : (
+        <>
+          <div className="rp-vsummary">
+            <div className="rp-vsum-cell">
+              <div className="rp-vsum-num" style={{ color: "var(--risk-red)" }}>{open.length}</div>
+              <div className="rp-vsum-lbl">Open</div>
+            </div>
+            <div className="rp-vsum-cell">
+              <div className="rp-vsum-num" style={{ color: "var(--risk-green)" }}>{closed.length}</div>
+              <div className="rp-vsum-lbl">Closed</div>
+            </div>
+            <div className="rp-vsum-cell">
+              <div className="rp-vsum-num">{current.filter((v) => v.severity === "C" || v.severity === "CLASS - 1").length}</div>
+              <div className="rp-vsum-lbl">High Severity</div>
+            </div>
+          </div>
+          <div className="rp-vtable-wrap">
+            <table className="rp-vtable">
+              <thead>
+                <tr>
+                  {th("Severity", "severity")}
+                  {th("Type / Description", "violation_type")}
+                  {th("Status", "is_open")}
+                  {th("Issued", "issue_date")}
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {tab === "TCO" && (
-          <table className="rp-vtable">
-            <thead><tr>
-              <th style={{width:110}}>Type</th>
-              <th>Status</th>
-              <th style={{width:100}}>Issued</th>
-            </tr></thead>
-            <tbody>
-              {tcoItems.map((item,i) => (
-                <tr key={i} className="rp-vrow">
-                  <td className="rp-vtd rp-vtd-badge">
-                    <span style={{ display:"inline-block", padding:"1px 6px", borderRadius:4, fontSize:10, fontWeight:700, fontFamily:"'DM Mono', monospace", background: item.expired ? "#fef2f2" : "#fef3c7", color: item.expired ? "#c4533a" : "#b45309" }}>
-                      {item.expired ? "EXPIRED" : "TEMP CO"}
-                    </span>
-                  </td>
-                  <td className="rp-vtd rp-vtd-desc">
-                    <div style={{ fontWeight:500, fontSize:13, color:"var(--navy)" }}>
-                      {item.expired ? "TCO Expired" : "Temporary Certificate of Occupancy"}
-                    </div>
-                    {item.expiry && <div style={{ fontSize:11, color: item.expired ? "#c4533a" : "#b45309", fontWeight:600, fontFamily:"'DM Mono', monospace", marginTop:2 }}>
-                      {item.expired ? "Expired" : "Expires"}: {item.expiry}
-                    </div>}
-                  </td>
-                  <td className="rp-vtd rp-vtd-date" style={{ fontFamily:"'DM Mono', monospace", fontSize:11, color:"var(--slate)", whiteSpace:"nowrap" }}>
-                    {fmtDate(item.date)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {(tab === "HPD" ? hpdItems : tab === "DOB" ? dobItems : tab === "ECB_OATH" ? ecbOathItems : tab === "Inspections" ? inspItems : tcoItems).length > page && (
-          <button className="rp-load-more" onClick={() => setPage(p => p + 25)}>
-            Show more ({(tab === "HPD" ? hpdItems : tab === "DOB" ? dobItems : tab === "ECB_OATH" ? ecbOathItems : tab === "Inspections" ? inspItems : tcoItems).length - page} remaining)
-          </button>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {sorted.slice(0, page).map((v) => (
+                  <ViolationRow
+                    key={v.id}
+                    v={v}
+                    expanded={expanded.has(v.id)}
+                    onToggle={() => toggleExpand(v.id)}
+                  />
+                ))}
+              </tbody>
+            </table>
+            {sorted.length > page && (
+              <button className="rp-load-more" onClick={() => setPage((p) => p + 20)}>
+                Show more ({sorted.length - page} remaining)
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
+
 // ─── Peer Bar ─────────────────────────────────────────────────────────────────
 function PeerBar({
   label,
@@ -976,18 +954,6 @@ function PeerBar({
   );
 }
 
-interface BuildingInsights {
-  inspection_days_12m: number | null;
-  inspection_days_peer_avg: number | null;
-  unit_band: string | null;
-  violations_by_year: Record<string, number> | null;
-  violations_5yr_total: number | null;
-  violations_5yr_trend: "increasing" | "decreasing" | "stable" | null;
-  oldest_open_violation_days: number | null;
-  multi_agency_count: number | null;
-  long_open_count: number | null;
-}
-
 // ─── Main ReportPage ──────────────────────────────────────────────────────────
 interface ReportPageProps {
   building?: Building;
@@ -1003,9 +969,6 @@ export default function ReportPage(_props: ReportPageProps) {
   const [riskScore, setRiskScore] = useState<RiskScore | null>(null);
   const [features, setFeatures] = useState<BuildingFeatures | null>(null);
   const [violations, setViolations] = useState<Violation[]>([]);
-  const [boroughStats, setBoroughStats] = useState<BoroughStat[]>([]);
-  const [ownershipStats, setOwnershipStats] = useState<OwnershipStat[]>([]);
-  const [insights, setInsights] = useState<BuildingInsights | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -1013,293 +976,51 @@ export default function ReportPage(_props: ReportPageProps) {
     setLoading(true);
     setError(null);
     try {
-      let w = (window as HalfaveWindow).__halfaveBldg;
+      // Get BIN from URL params or window global
+      const params = new URLSearchParams(window.location.search);
+      const bin = params.get("bin") || (window as any).__halfaveBldg?.bin;
+      if (!bin) throw new Error("No building BIN specified.");
 
-      // If arriving from email link (?bin=XXXX) with no window data, call edge function
-      if (!w?.bin) {
-        const urlBin = new URLSearchParams(window.location.search).get("bin");
-        if (!urlBin) throw new Error("No building data found. Please search for a building first.");
+      // Fetch building
+      const { data: bldgs, error: bErr } = await supabase
+        .from("buildings")
+        .select("*")
+        .eq("bin", bin)
+        .limit(1);
+      if (bErr) throw bErr;
+      if (!bldgs?.length) throw new Error(`No building found for BIN ${bin}`);
+      const bldg = bldgs[0];
+      setBuilding(bldg);
 
-        const edgeRes = await fetch(
-          `https://mjkkzniagexfooclqsjr.supabase.co/functions/v1/bin-lookup?bin=${urlBin}`
-        );
-        if (!edgeRes.ok) {
-          const errJson = await edgeRes.json().catch(() => ({}));
-          throw new Error(errJson.error || `No building found for BIN ${urlBin}`);
-        }
-        const result = await edgeRes.json();
-        const b    = result.building;
-        const sc   = result.score;
-        const feat = result.features;
-        const viols = result.violations;
+      const buildingId = bldg.id;
 
-        const boroNames: Record<string, string> = { "1":"Manhattan","2":"Bronx","3":"Brooklyn","4":"Queens","5":"Staten Island" };
+      // Parallel: risk score + features + violations
+      const [rsRes, ftRes, vRes] = await Promise.all([
+        supabase
+          .from("building_risk_scores")
+          .select("*")
+          .eq("building_id", buildingId)
+          .single(),
+        supabase
+          .from("building_features")
+          .select("*")
+          .eq("building_id", buildingId)
+          .single(),
+        supabase
+          .from("violations")
+          .select("*")
+          .eq("building_id", buildingId)
+          .order("issue_date", { ascending: false }),
+      ]);
 
-        (window as HalfaveWindow).__halfaveBldg = {
-          bin:               urlBin,
-          address:           b.address,
-          bbl:               b.bbl,
-          stories:           b.stories,
-          units:             b.units,
-          yearBuilt:         b.yearBuilt,
-          zipcode:           b.zipcode,
-          borough:           b.borough,
-          boroName:          b.boroName || boroNames[b.borough] || "",
-          managementProgram: b.managementProgram,
-          riskScore:         sc.healthScore,
-          percentile:        sc.percentile,
-          riskBucket:        sc.riskBucket,
-          openViolations:    feat.open_violations,
-          violations: {
-            hpd:        viols.hpd,
-            dob:        viols.dob,
-            ecb:        viols.ecb,
-            oath:       viols.oath       ?? [],
-            sanitation: viols.sanitation ?? [],
-            dohmh:      viols.dohmh      ?? [],
-            nypd:       viols.nypd       ?? [],
-          },
-        };
-        w = (window as HalfaveWindow).__halfaveBldg!;
-      }
-
-      // Hydrate building from window
-      const resolvedBldg: Building = {
-        id: `bin-${w.bin}`,
-        bin: w.bin,
-        address: w.address || "",
-        borough: w.boroName || w.borough || "",
-        borough_name: w.boroName || w.borough || undefined,
-        bbl: w.bbl || null,
-        stories: w.stories ? parseInt(String(w.stories)) : null,
-        unit_count: w.units ? parseInt(String(w.units)) : null,
-        year_built: w.yearBuilt && w.yearBuilt !== "—" ? parseInt(w.yearBuilt) : null,
-        zipcode: w.zipcode || null,
-        management_program: w.managementProgram || null,
-        slug: undefined,
-        risk_score: w.riskScore ?? null,
-        risk_bucket: w.riskBucket ?? null,
-        percentile: w.percentile ?? null,
-        top_drivers: w.topDrivers ?? null,
-      };
-      setBuilding(resolvedBldg);
-
-      // Hydrate risk score from window
-      setRiskScore({
-        risk_score: w.riskScore ?? 0,
-        percentile: w.percentile ?? 0,
-        risk_bucket: w.riskBucket ?? "Unknown",
-        top_drivers: { drivers: (w.topDrivers || []) },
-      });
-
-      // Hydrate building features from window
-      setFeatures({
-        open_violations: w.openViolations ?? 0,
-        recent_12m_violations: w.recent12m ?? 0,
-        severity_points: 0,
-        avg_open_age_days: 0,
-        violation_density: 0,
-        avg_resolution_days: 0,
-        resolution_rate: 0,
-        expired_tco: w.expiredTco ?? false,
-        boiler_count: w.boilerCount ?? 0,
-        boiler_avg_missed_years: 0,
-        elevator_count: w.elevatorCount ?? 0,
-        elevator_avg_missed_years: 0,
-      });
-
-      // Hydrate violations from window — flatten all sources into Violation[]
-      const vw = (w.violations || {}) as NonNullable<HalfaveBldgWindow["violations"]>;
-      const toViolations = (arr: any[], agencyLabel: string, isOpen: boolean): Violation[] => {
-        const agencyEnum = (agencyLabel === "HPD" || agencyLabel === "DOB" || agencyLabel === "ECB")
-          ? agencyLabel as Violation["agency"]
-          : agencyLabel === "OATH" ? "ECB" as const
-          : agencyLabel === "DSNY" || agencyLabel === "NYPD" ? "DOB" as const
-          : "HPD" as const;
-        return (arr || []).map((v: any) => ({
-          id: v.id || "",
-          agency: agencyEnum,
-          source: agencyLabel,
-          is_open: isOpen,
-          violation_type: v.cls || v.type || agencyLabel,
-          description: v.desc || v.description || "",
-          issue_date: v.date || v.violation_date || v.issue_date || undefined,
-          penalty_amount: v.penalty ?? undefined,
-          disposition: v.status || undefined,
-        }));
-      };
-
-      const allViolations: Violation[] = [
-        ...toViolations(vw.hpd?.open || [], "HPD", true),
-        ...toViolations(vw.hpd?.closed || [], "HPD", false),
-        ...toViolations(vw.dob?.open || [], "DOB", true),
-        ...toViolations(vw.dob?.closed || [], "DOB", false),
-        ...toViolations(vw.ecb?.open || [], "ECB", true),
-        ...toViolations(vw.ecb?.closed || [], "ECB", false),
-        ...toViolations(
-          (vw.oath || []).filter((v: any) => {
-            const d = (v.disposition || "").toUpperCase();
-            return !d.includes("DISMISS") && d !== "PAID IN FULL" && d !== "PAID";
-          }), "OATH", true),
-        ...toViolations(
-          (vw.sanitation || []).filter((v: any) => parseFloat(v.balance_due ?? "0") > 0),
-          "DSNY", true),
-        ...toViolations(
-          (vw.dohmh || []).filter((v: any) => parseFloat(v.balance_due ?? "0") > 0),
-          "DOHMH", true),
-        ...toViolations(
-          (vw.nypd || []).filter((v: any) => parseFloat(v.balance_due ?? "0") > 0),
-          "NYPD", true),
-      ];
-      setViolations(allViolations);
-
-      // Borough stats + peer avg — run in parallel, non-blocking (don't await)
-      const boroughNameMap: Record<string, string> = {
-        "1": "Manhattan", "2": "Bronx", "3": "Brooklyn", "4": "Queens", "5": "Staten Island",
-      };
-const SUPA_RPC = (fn: string) => fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, {
-        method: "POST",
-        headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", "Content-Profile": "analytics" },
-        body: "{}",
-      }).then(r => r.json()).then(data => ({ data, error: null })).catch(e => ({ data: null, error: e }));
-
-      Promise.all([
-        SUPA_RPC("borough_avg_scores"),
-        SUPA_RPC("ownership_avg_scores"),
-        w?.bin ? (supabase as any)
-          .from("buildings")
-          .select("building_insights(inspection_days_peer_avg)")
-          .eq("bin", String(w.bin))
-          .single() : Promise.resolve({ data: null }),
-      ]).then(([boroughRes, ownershipRes, peerRes]: any[]) => {
-        console.log("[halfave] boroughRes:", boroughRes);
-        console.log("[halfave] ownershipRes:", ownershipRes);
-        if (boroughRes.data) {
-          const stats: BoroughStat[] = boroughRes.data.map((r: any) => ({
-            name: boroughNameMap[String(r.borough)] ?? String(r.borough),
-            avg_score: Math.round(Number(r.avg_score) * 10) / 10,
-            count: Number(r.count),
-          })).filter((s: BoroughStat) => s.name);
-          setBoroughStats(stats);
-        }
-        if (ownershipRes.data) {
-          const ostats: OwnershipStat[] = ownershipRes.data.map((r: any) => ({
-            ownership: r.ownership,
-            avg_score: Math.round(Number(r.avg_score) * 10) / 10,
-            count: Number(r.count),
-          }));
-          setOwnershipStats(ostats);
-        }
-        const peerRow = peerRes.data?.building_insights;
-        const peerAvg = Array.isArray(peerRow)
-          ? peerRow[0]?.inspection_days_peer_avg
-          : peerRow?.inspection_days_peer_avg;
-        if (peerAvg != null) {
-          setInsights(prev => prev ? { ...prev, inspection_days_peer_avg: Number(peerAvg) } : prev);
-        }
-      }).catch((err: any) => { console.error("[halfave] context fetch failed:", err); });
-
-      // Compute insights client-side from window violation data
-      try {
-        const ww = (window as HalfaveWindow).__halfaveBldg;
-        const vw = ww?.violations;
-        if (vw) {
-          const allViolations = [
-            ...(vw.hpd?.open || []).map((v: any) => ({ ...v, agency: "HPD", is_open: true })),
-            ...(vw.hpd?.closed || []).map((v: any) => ({ ...v, agency: "HPD", is_open: false })),
-            ...(vw.dob?.open || []).map((v: any) => ({ ...v, agency: "DOB", is_open: true })),
-            ...(vw.dob?.closed || []).map((v: any) => ({ ...v, agency: "DOB", is_open: false })),
-            ...(vw.ecb?.open || []).map((v: any) => ({ ...v, agency: "ECB", is_open: true })),
-            ...(vw.ecb?.closed || []).map((v: any) => ({ ...v, agency: "ECB", is_open: false })),
-            ...(vw.oath || []).map((v: any) => ({ ...v, agency: "OATH", is_open: true })),
-            ...(vw.sanitation || []).map((v: any) => ({ ...v, agency: "DSNY", is_open: true })),
-            ...(vw.dohmh || []).map((v: any) => ({ ...v, agency: "DOHMH", is_open: true })),
-            ...(vw.nypd || []).map((v: any) => ({ ...v, agency: "NYPD", is_open: true })),
-          ];
-
-          const now = new Date();
-          const twelveMonthsAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-          const threeYearsAgo = new Date(now.getTime() - 3 * 365 * 24 * 60 * 60 * 1000);
-          const currentYear = now.getFullYear();
-
-          // Inspection frequency: distinct dates in last 12m
-          const recentDates = new Set<string>();
-          for (const v of allViolations) {
-            const d = v.date || v.novissueddate || v.issue_date || "";
-            if (d && new Date(d) >= twelveMonthsAgo) recentDates.add(d.slice(0, 10));
-          }
-          const inspection_days_12m = recentDates.size;
-
-          // Multi-agency: months where 2+ agencies issued violations
-          const byMonth: Record<string, Set<string>> = {};
-          for (const v of allViolations) {
-            const d = v.date || v.novissueddate || v.issue_date || "";
-            if (!d) continue;
-            const ym = d.slice(0, 7);
-            if (!byMonth[ym]) byMonth[ym] = new Set();
-            byMonth[ym].add(v.agency);
-          }
-          const multi_agency_count = Object.values(byMonth).filter(s => s.size > 1).length;
-
-          // Violations by year (last 5)
-          const violations_by_year: Record<string, number> = {};
-          for (const v of allViolations) {
-            const d = v.date || v.novissueddate || v.issue_date || "";
-            if (!d) continue;
-            const yr = new Date(d).getFullYear();
-            if (yr >= currentYear - 5 && yr <= currentYear) {
-              violations_by_year[yr] = (violations_by_year[yr] || 0) + 1;
-            }
-          }
-          const violations_5yr_total = Object.values(violations_by_year).reduce((a, b) => a + b, 0);
-          const recent2 = (violations_by_year[currentYear] || 0) + (violations_by_year[currentYear - 1] || 0);
-          const prior2 = (violations_by_year[currentYear - 3] || 0) + (violations_by_year[currentYear - 4] || 0);
-          const violations_5yr_trend = recent2 > prior2 * 1.1 ? "increasing" : recent2 < prior2 * 0.9 ? "decreasing" : "stable";
-
-          // Oldest open violation
-          let oldestDays = 0;
-          let long_open_count = 0;
-          for (const v of allViolations) {
-            if (!v.is_open) continue;
-            const d = v.date || v.novissueddate || v.issue_date || "";
-            if (!d) continue;
-            const days = Math.floor((now.getTime() - new Date(d).getTime()) / (1000 * 60 * 60 * 24));
-            if (days > oldestDays) oldestDays = days;
-            if (new Date(d) < threeYearsAgo) long_open_count++;
-          }
-
-          // Unit band from window
-          const units = ww?.units ? parseInt(String(ww.units)) : 0;
-          const unit_band = units <= 20 ? "1–20" : units <= 50 ? "20–50" : units <= 100 ? "50–100" : units <= 250 ? "100–250" : "250+";
-
-          setInsights({
-            inspection_days_12m,
-            inspection_days_peer_avg: null,
-            unit_band,
-            violations_by_year,
-            violations_5yr_total,
-            violations_5yr_trend: violations_5yr_trend as "increasing" | "decreasing" | "stable",
-            oldest_open_violation_days: oldestDays,
-            multi_agency_count,
-            long_open_count,
-          });
-        }
-      } catch (_) { /* insights optional */ }
+      if (rsRes.data) setRiskScore(rsRes.data);
+      if (ftRes.data) setFeatures(ftRes.data);
+      if (vRes.data) setViolations(vRes.data);
     } catch (e: any) {
       setError(e?.message || "Failed to load report.");
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  // Inject Google Fonts into document.head
-  useEffect(() => {
-    if (document.getElementById("halfave-fonts")) return;
-    const link = document.createElement("link");
-    link.id = "halfave-fonts";
-    link.rel = "stylesheet";
-    link.href = "https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap";
-    document.head.appendChild(link);
   }, []);
 
   useEffect(() => {
@@ -1309,8 +1030,7 @@ const SUPA_RPC = (fn: string) => fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, {
   if (loading) {
     return (
       <>
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <style>{CSS}</style>
+        <style>{CSS}</style>
         <div className="rp-root">
           <div className="rp-loading">
             <div className="rp-spinner" />
@@ -1336,18 +1056,20 @@ const SUPA_RPC = (fn: string) => fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, {
 
   const rs = riskScore;
   const pct = rs?.percentile ?? 0;
-  const score = rs?.risk_score ?? 0;
-  const healthScore = 100 - score;
-  const bucket = rs?.risk_bucket ?? "Unknown";
+  const score = rs?.health_score ?? rs?.risk_score ?? 0;
+  const bucket = score >= 80 ? "Healthy" : score >= 60 ? "Good" : score >= 40 ? "Fair" : "Watch";
+  const drivers = rs?.top_drivers?.drivers ?? [];
   const boroughName = getBoroughName(building.borough);
 
+  const openViolations = features?.open_violations ?? violations.filter((v) => v.is_open).length;
+  const recent12m = features?.recent_12m_violations ?? 0;
 
   // Financial exposure
   const totalBalance = violations.reduce((s, v) => s + (v.balance_due ?? 0), 0);
 
-  const scoreColor = healthScore >= 75 ? "var(--risk-green)" : healthScore >= 50 ? "var(--risk-amber)" : "var(--risk-red)";
-  const scoreBg = healthScore >= 75 ? "var(--risk-green-bg)" : healthScore >= 50 ? "var(--risk-amber-bg)" : "var(--risk-red-bg)";
-  const bandPct = healthScore;  // 0=left(red), 100=right(green)
+  const scoreColor = riskColor(score);
+  const scoreBg = riskBg(score);
+  const bandPct = (score / 100) * 100;
 
   // Peer comparison data (NYC averages rough estimates)
   const peerRows = features
@@ -1387,13 +1109,12 @@ const SUPA_RPC = (fn: string) => fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, {
 
   return (
     <>
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <style>{CSS}</style>
       <div className="rp-root">
         {/* ── HERO ── */}
         <div className="rp-hero">
           <div className="rp-hero-inner">
-            <div className="rp-hero-eyebrow">NYC Building Health Report · Half Ave</div>
+            <div className="rp-hero-eyebrow">NYC Building Risk Report · Half Ave</div>
             <div className="rp-hero-address">{building.address}</div>
             <div className="rp-hero-meta">
               <span>{boroughName}</span>
@@ -1410,9 +1131,9 @@ const SUPA_RPC = (fn: string) => fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, {
                   className="rp-score-circle"
                   style={{ color: scoreColor, borderColor: scoreColor, background: scoreBg }}
                 >
-                  {healthScore}
+                  {score}
                 </div>
-                <div className="rp-score-label">Health Index</div>
+                <div className="rp-score-label">Building Health Index</div>
                 <div
                   className="rp-score-badge"
                   style={{ background: scoreColor + "22", color: scoreColor }}
@@ -1421,49 +1142,28 @@ const SUPA_RPC = (fn: string) => fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, {
                 </div>
               </div>
 
-              {/* ── 3-line peer comparison ── */}
-              {(() => {
-                const w = (window as any).__halfaveBldg;
-                const unitCount = building.unit_count ?? (w?.units ? parseInt(String(w.units)) : 0);
-                const unitBand = unitCount <= 20 ? "1–20" : unitCount <= 50 ? "20–50" : unitCount <= 100 ? "50–100" : unitCount <= 250 ? "100–250" : "250+";
-                function cmp(p: number) {
-                  return p >= 50
-                    ? <span style={{color:"var(--risk-green)",fontWeight:700}}>better than {p}%</span>
-                    : <span style={{color:"var(--risk-red)",fontWeight:700}}>worse than {100-p}%</span>;
-                }
-                const boroughPct = boroughStats.length > 0
-                  ? (() => {
-                      const bs = boroughStats.find(b => b.name === boroughName);
-                      if (!bs) return null;
-                      // rough percentile within borough: if our score < avg → better than ~60%, else worse
-                      const rel = bs.avg_score > 0 ? Math.round(Math.max(5, Math.min(95, (1 - score / (bs.avg_score * 2)) * 100))) : null;
-                      return rel;
-                    })()
-                  : null;
-                return (
-                  <div style={{marginTop:16, display:"flex", flexDirection:"column", gap:6}}>
-                    <div style={{fontFamily:"'DM Mono', monospace", fontSize:10, letterSpacing:"0.1em", textTransform:"uppercase", color:"var(--slate)", marginBottom:2}}>Compared to</div>
-                    <div style={{fontSize:13, color:"rgba(255,255,255,0.85)", fontFamily:"'Inter', -apple-system, sans-serif"}}>
-                      NYC buildings: {cmp(pct)}
+              <div className="rp-kpi-row">
+                <div className="rp-kpi">
+                  <div className="rp-kpi-val">{fmt(openViolations)}</div>
+                  <div className="rp-kpi-lbl">Open Violations</div>
+                </div>
+                <div className="rp-kpi">
+                  <div className="rp-kpi-val">{fmt(recent12m)}</div>
+                  <div className="rp-kpi-lbl">Last 12 Months</div>
+                </div>
+                <div className="rp-kpi">
+                  <div className="rp-kpi-val">{pct >= 99 ? "99.9" : pct.toFixed(0)}th</div>
+                  <div className="rp-kpi-lbl">Percentile</div>
+                </div>
+                {totalBalance > 0 && (
+                  <div className="rp-kpi">
+                    <div className="rp-kpi-val" style={{ color: "var(--risk-red)" }}>
+                      {fmtCurrency(totalBalance)}
                     </div>
-                    {boroughName && boroughPct !== null && (
-                      <div style={{fontSize:13, color:"rgba(255,255,255,0.85)", fontFamily:"'Inter', -apple-system, sans-serif"}}>
-                        {boroughName} buildings: {cmp(boroughPct)}
-                      </div>
-                    )}
-                    {unitCount > 0 && (
-                      <div style={{fontSize:13, color:"rgba(255,255,255,0.85)", fontFamily:"'Inter', -apple-system, sans-serif"}}>
-                        Buildings with {unitBand} units: {cmp(Math.round(Math.max(5, Math.min(95, pct + (unitCount > 100 ? -3 : unitCount > 50 ? 2 : 5)))))}
-                      </div>
-                    )}
-                    {totalBalance > 0 && (
-                      <div style={{marginTop:4, fontSize:12, color:"var(--risk-red)", fontFamily:"'DM Mono', monospace", fontWeight:600}}>
-                        {fmtCurrency(totalBalance)} outstanding balance
-                      </div>
-                    )}
+                    <div className="rp-kpi-lbl">Balance Due</div>
                   </div>
-                );
-              })()}
+                )}
+              </div>
             </div>
           </div>
 
@@ -1518,172 +1218,88 @@ const SUPA_RPC = (fn: string) => fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, {
             </div>
           )}
 
-          {/* ── OPEN VIOLATIONS (main tabbed view) ── */}
-          <div className="rp-section">
-            <div className="rp-section-title">Open Violations</div>
-            <OpenViolationTabs violations={violations} elevators={[]} boilers={[]} co={null} />
-          </div>
-
-          {/* ── INSIGHTS ── */}
-          {insights && (
+          {/* ── RISK DRIVERS ── */}
+          {drivers.length > 0 && (
             <div className="rp-section">
-              <div className="rp-section-title">Insights</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-
-                {/* Card 1: Inspection Frequency */}
-                <div className="rp-card" style={{ padding: "20px 20px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
-                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)" }}>Inspection Frequency</div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                    <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 36, fontWeight: 700, lineHeight: 1,
-                      color: (insights.inspection_days_12m ?? 0) > 6 ? "var(--risk-red)"
-                           : (insights.inspection_days_12m ?? 0) > 3 ? "var(--risk-amber)"
-                           : "var(--risk-green)" }}>
-                      {insights.inspection_days_12m ?? 0}
-                    </span>
-                    <span style={{ fontSize: 12, color: "var(--slate)", fontFamily: "'Inter', -apple-system, sans-serif" }}>visits / 12 mo</span>
-                  </div>
-                  {/* Comparison bars */}
-                  {(() => {
-                    const mine = insights.inspection_days_12m ?? 0;
-                    const avg = insights.inspection_days_peer_avg;
-                    const maxBar = Math.max(mine, avg ?? 0, 1) * 1.2;
-                    const myPct = Math.min((mine / maxBar) * 100, 100);
-                    const avgPct = avg != null ? Math.min((avg / maxBar) * 100, 100) : null;
-                    const barColor = mine > 6 ? "var(--risk-red)" : mine > 3 ? "var(--risk-amber)" : "var(--risk-green)";
+              <div className="rp-section-title">Top Risk Drivers</div>
+              <div className="rp-card">
+                <div className="rp-drivers">
+                  {drivers.map((d, i) => {
+                    const meta = driverMeta(d);
                     return (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--slate)", width: 58, flexShrink: 0 }}>This bldg</span>
-                          <div style={{ flex: 1, height: 7, background: "rgba(17,30,48,0.07)", borderRadius: 4, overflow: "hidden" }}>
-                            <div style={{ width: `${myPct}%`, height: "100%", background: barColor, borderRadius: 4 }} />
-                          </div>
-                          <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--navy)", width: 22, textAlign: "right" }}>{mine}</span>
+                      <div className="rp-driver" key={i}>
+                        <span className="rp-driver-idx">{i + 1}</span>
+                        <div
+                          className="rp-driver-icon"
+                          style={{ background: meta.bg }}
+                        >
+                          {meta.icon}
                         </div>
-                        {avg != null && (
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--slate)", width: 58, flexShrink: 0 }}>Peer avg</span>
-                            <div style={{ flex: 1, height: 7, background: "rgba(17,30,48,0.07)", borderRadius: 4, overflow: "hidden" }}>
-                              <div style={{ width: `${avgPct}%`, height: "100%", background: "var(--slate)", borderRadius: 4, opacity: 0.45 }} />
-                            </div>
-                            <span style={{ fontSize: 10, fontFamily: "'DM Mono', monospace", color: "var(--slate)", width: 22, textAlign: "right" }}>{avg.toFixed(1)}</span>
-                          </div>
-                        )}
+                        <span className="rp-driver-text">{d}</span>
                       </div>
                     );
-                  })()}
-                  <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "'Inter', -apple-system, sans-serif", lineHeight: 1.55, flexGrow: 1 }}>
-                    {(() => {
-                      const mine = insights.inspection_days_12m ?? 0;
-                      const avg = insights.inspection_days_peer_avg;
-                      const band = insights.unit_band ?? "";
-                      if (mine === 0) return "No inspections recorded in the last 12 months.";
-                      if (avg != null && mine > avg * 1.5) return <>Significantly above the <strong>{avg.toFixed(1)}×</strong> peer avg for {band}-unit buildings — suggests ongoing unresolved issues.</>;
-                      if (avg != null && mine > avg) return <>Above the <strong>{avg.toFixed(1)}×</strong> peer avg for {band}-unit buildings in this borough.</>;
-                      if (avg != null) return <>In line with the <strong>{avg.toFixed(1)}×</strong> peer avg for {band}-unit buildings.</>;
-                      if (mine > 6) return <>High frequency — suggests ongoing unresolved issues attracting repeat enforcement.</>;
-                      return <>Normal activity level for the past year.</>;
-                    })()}
-                  </div>
+                  })}
                 </div>
-
-                {/* Card 2: Violation Momentum */}
-                <div className="rp-card" style={{ padding: "20px 20px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
-                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)" }}>Violation Momentum</div>
-                  {/* Big number + trend */}
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                    <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 36, fontWeight: 700, lineHeight: 1,
-                      color: insights.violations_5yr_trend === "increasing" ? "var(--risk-red)" : insights.violations_5yr_trend === "decreasing" ? "var(--risk-green)" : "var(--slate)" }}>
-                      {insights.violations_5yr_total ?? 0}
-                    </span>
-                    <span style={{ fontSize: 12, color: "var(--slate)", fontFamily: "'Inter', -apple-system, sans-serif" }}>violations / 5 yr</span>
-                    {insights.violations_5yr_trend && (
-                      <span style={{ marginLeft: "auto", fontSize: 13, fontFamily: "'DM Mono', monospace",
-                        color: insights.violations_5yr_trend === "increasing" ? "var(--risk-red)" : insights.violations_5yr_trend === "decreasing" ? "var(--risk-green)" : "var(--slate)" }}>
-                        {insights.violations_5yr_trend === "increasing" ? "↑ increasing" : insights.violations_5yr_trend === "decreasing" ? "↓ decreasing" : "→ stable"}
-                      </span>
-                    )}
-                  </div>
-                  {/* Sparkline */}
-                  {insights.violations_by_year && (() => {
-                    const byYear = insights.violations_by_year!;
-                    const years = Object.keys(byYear).sort();
-                    const vals = years.map(y => byYear[y]);
-                    const maxVal = Math.max(...vals, 1);
-                    const W = 220, H = 72, pad = 10, top = 14, bot = 60;
-                    const xs = years.map((_, i) => pad + (i / Math.max(years.length - 1, 1)) * (W - pad * 2));
-                    const ys = vals.map(v => top + (1 - v / maxVal) * (bot - top - 2));
-                    const pts = xs.map((x, i) => `${x},${ys[i]}`).join(" ");
-                    const tc = insights.violations_5yr_trend === "increasing" ? "#c4533a" : insights.violations_5yr_trend === "decreasing" ? "#3a7d5e" : "#7a8fa6";
-                    return (
-                      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", overflow: "visible" }}>
-                        <line x1={pad} y1={bot} x2={W - pad} y2={bot} stroke="rgba(17,30,48,0.08)" strokeWidth={0.5} />
-                        <polygon points={`${xs[0]},${bot} ${pts} ${xs[xs.length-1]},${bot}`} fill={tc} opacity={0.08} />
-                        <polyline points={pts} fill="none" stroke={tc} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-                        {xs.map((x, i) => (
-                          <g key={i}>
-                            <circle cx={x} cy={ys[i]} r={3} fill={tc} />
-                            <text x={x} y={ys[i] - 5} textAnchor="middle" fontSize={9} fill="#7a8fa6" fontFamily="monospace">{vals[i]}</text>
-                            <text x={x} y={H} textAnchor="middle" fontSize={9} fill="#7a8fa6" fontFamily="monospace">'{years[i].slice(2)}</text>
-                          </g>
-                        ))}
-                      </svg>
-                    );
-                  })()}
-                </div>
-
-                {/* Card 3: Hidden Risk Signals */}
-                <div className="rp-card" style={{ padding: "20px 20px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
-                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)" }}>Hidden Risk Signals</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, flexGrow: 1 }}>
-                    {(insights.oldest_open_violation_days ?? 0) > 365 ? (
-                      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                        <span style={{ fontSize: 14, lineHeight: 1.2, flexShrink: 0 }}>🕐</span>
-                        <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "'Inter', -apple-system, sans-serif", lineHeight: 1.5 }}>
-                          Oldest open violation is <strong style={{ color: "var(--risk-amber)" }}>{Math.round((insights.oldest_open_violation_days ?? 0) / 365 * 10) / 10} years</strong> old
-                          {(insights.long_open_count ?? 0) > 0 && <>; <strong>{insights.long_open_count}</strong> violations open 3+ years</>}.
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                        <span style={{ fontSize: 14, lineHeight: 1.2 }}>✅</span>
-                        <div style={{ fontSize: 12, color: "var(--slate)", fontFamily: "'Inter', -apple-system, sans-serif", lineHeight: 1.5 }}>No violations open longer than 1 year.</div>
-                      </div>
-                    )}
-                    {(insights.multi_agency_count ?? 0) > 2 ? (
-                      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                        <span style={{ fontSize: 14, lineHeight: 1.2, flexShrink: 0 }}>🏛️</span>
-                        <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "'Inter', -apple-system, sans-serif", lineHeight: 1.5 }}>
-                          <strong style={{ color: "var(--risk-amber)" }}>{insights.multi_agency_count}</strong> months with violations from multiple agencies simultaneously — suggests systemic issues.
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                        <span style={{ fontSize: 14, lineHeight: 1.2 }}>✅</span>
-                        <div style={{ fontSize: 12, color: "var(--slate)", fontFamily: "'Inter', -apple-system, sans-serif", lineHeight: 1.5 }}>No multi-agency enforcement patterns detected.</div>
-                      </div>
-                    )}
-                    {(insights.inspection_days_12m ?? 0) > 3 ? (
-                      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                        <span style={{ fontSize: 14, lineHeight: 1.2, flexShrink: 0 }}>🔍</span>
-                        <div style={{ fontSize: 12, color: "var(--navy)", fontFamily: "'Inter', -apple-system, sans-serif", lineHeight: 1.5 }}>
-                          <strong style={{ color: (insights.inspection_days_12m ?? 0) > 6 ? "var(--risk-red)" : "var(--risk-amber)" }}>{insights.inspection_days_12m}×</strong> inspection visits — {(insights.inspection_days_12m ?? 0) > 6 ? "high frequency often signals unresolved repeat violations." : "above average for this building type."}
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                        <span style={{ fontSize: 14, lineHeight: 1.2 }}>✅</span>
-                        <div style={{ fontSize: 12, color: "var(--slate)", fontFamily: "'Inter', -apple-system, sans-serif", lineHeight: 1.5 }}>Inspection frequency is normal for this building type.</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
               </div>
             </div>
           )}
 
-
-
+          {/* ── BUILDING METRICS ── */}
+          {features && (
+            <div className="rp-section">
+              <div className="rp-section-title">Building Metrics</div>
+              <div className="rp-stats-grid">
+                <div className="rp-stat">
+                  <div className={`rp-stat-val ${features.open_violations > 20 ? "rp-stat-warn" : features.open_violations > 10 ? "rp-stat-caution" : "rp-stat-ok"}`}>
+                    {fmt(features.open_violations)}
+                  </div>
+                  <div className="rp-stat-lbl">Open violations</div>
+                </div>
+                <div className="rp-stat">
+                  <div className={`rp-stat-val ${features.recent_12m_violations > 30 ? "rp-stat-warn" : features.recent_12m_violations > 15 ? "rp-stat-caution" : ""}`}>
+                    {fmt(features.recent_12m_violations)}
+                  </div>
+                  <div className="rp-stat-lbl">New last 12 months</div>
+                </div>
+                <div className="rp-stat">
+                  <div className={`rp-stat-val ${features.avg_open_age_days > 500 ? "rp-stat-warn" : features.avg_open_age_days > 200 ? "rp-stat-caution" : ""}`}>
+                    {Math.round(features.avg_open_age_days)}d
+                  </div>
+                  <div className="rp-stat-lbl">Avg days open</div>
+                </div>
+                <div className="rp-stat">
+                  <div className={`rp-stat-val ${features.violation_density > 1 ? "rp-stat-warn" : features.violation_density > 0.5 ? "rp-stat-caution" : "rp-stat-ok"}`}>
+                    {features.violation_density.toFixed(2)}
+                  </div>
+                  <div className="rp-stat-lbl">Violations per unit</div>
+                </div>
+                <div className="rp-stat">
+                  <div className={`rp-stat-val ${features.resolution_rate < 0.5 ? "rp-stat-warn" : features.resolution_rate < 0.7 ? "rp-stat-caution" : "rp-stat-ok"}`}>
+                    {Math.round(features.resolution_rate * 100)}%
+                  </div>
+                  <div className="rp-stat-lbl">Resolution rate</div>
+                </div>
+                <div className="rp-stat">
+                  <div className={`rp-stat-val ${features.avg_resolution_days > 365 ? "rp-stat-warn" : features.avg_resolution_days > 180 ? "rp-stat-caution" : ""}`}>
+                    {Math.round(features.avg_resolution_days)}d
+                  </div>
+                  <div className="rp-stat-lbl">Avg days to resolve</div>
+                </div>
+                <div className="rp-stat">
+                  <div className={`rp-stat-val ${features.severity_points > 200 ? "rp-stat-warn" : features.severity_points > 100 ? "rp-stat-caution" : ""}`}>
+                    {fmt(features.severity_points)}
+                  </div>
+                  <div className="rp-stat-lbl">Severity score</div>
+                </div>
+                {totalBalance > 0 && (
+                  <div className="rp-stat">
+                    <div className="rp-stat-val rp-stat-warn">{fmtCurrency(totalBalance)}</div>
+                    <div className="rp-stat-lbl">Balance due</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* ── PEER COMPARISON ── */}
           {peerRows.length > 0 && (
@@ -1694,106 +1310,35 @@ const SUPA_RPC = (fn: string) => fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, {
                   <PeerBar key={row.label} {...row} />
                 ))}
               </div>
-              <div style={{ marginTop: 8, fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--slate)" }}>
+              <div style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--slate)" }}>
                 Gray marker = NYC building average. Bar = this building.
               </div>
             </div>
           )}
 
-          {/* ── CONTEXT TABLES (dark navy background) ── */}
-          <div style={{ margin: "0 0 32px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-              <div style={{ flex: 1, height: 1, background: "var(--navy-10)" }} />
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)", whiteSpace: "nowrap" }}>
-                NYC averages — not specific to this building
+          {/* ── VIOLATIONS ── */}
+          {violations.length > 0 && (
+            <div className="rp-section">
+              <div className="rp-section-title">
+                All Violations
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                  {violations.length} total · click row to expand
+                </span>
               </div>
-              <div style={{ flex: 1, height: 1, background: "var(--navy-10)" }} />
+              <ViolationTabs violations={violations} />
             </div>
-            <div style={{ background: "#111e30", borderRadius: 16, padding: "24px" }}>
-            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 16 }}>
-              NYC context — all buildings
-            </div>
-            {(boroughStats.length === 0 && ownershipStats.length === 0) ? (
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.3)" }}>Loading…</div>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 16 }}>
-
-                {/* Borough table */}
-                {boroughStats.length > 0 && (
-                  <div>
-                    <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>By Borough</div>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'Inter', -apple-system, sans-serif", fontSize: 12 }}>
-                      <thead>
-                        <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-                          <th style={{ padding: "8px 12px", textAlign: "left", fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontWeight: 600 }}>Borough</th>
-                          <th style={{ padding: "8px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontWeight: 600 }}>Avg Index</th>
-                          <th style={{ padding: "8px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontWeight: 600 }}>Bldgs</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[...boroughStats].sort((a, b) => b.avg_score - a.avg_score).map((s, i, arr) => (
-                          <tr key={s.name} style={{ borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none", background: s.name === boroughName ? "rgba(255,255,255,0.07)" : "transparent" }}>
-                            <td style={{ padding: "8px 12px", color: "rgba(255,255,255,0.9)", fontWeight: s.name === boroughName ? 600 : 400 }}>
-                              {s.name}{s.name === boroughName && <span style={{ marginLeft: 6, fontSize: 9, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.35)" }}>←</span>}
-                            </td>
-                            <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", fontWeight: 600, color: boroughScoreColor(s.avg_score) }}>{s.avg_score.toFixed(1)}</td>
-                            <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.35)" }}>{s.count.toLocaleString()}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {/* Ownership table */}
-                {ownershipStats.length > 0 && (
-                  <div>
-                    <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>By Ownership</div>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "'Inter', -apple-system, sans-serif", fontSize: 12 }}>
-                      <thead>
-                        <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-                          <th style={{ padding: "8px 12px", textAlign: "left", fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontWeight: 600 }}>Type</th>
-                          <th style={{ padding: "8px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontWeight: 600 }}>Avg Index</th>
-                          <th style={{ padding: "8px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", fontWeight: 600 }}>Bldgs</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(() => {
-                          const isPrivate = (building.management_program ?? "") === "PVT";
-                          const thisOwnership = isPrivate ? "Private" : "Public / Regulated";
-                          return [...ownershipStats].sort((a, b) => b.avg_score - a.avg_score).map((s, i, arr) => (
-                            <tr key={s.ownership} style={{ borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none", background: s.ownership === thisOwnership ? "rgba(255,255,255,0.07)" : "transparent" }}>
-                              <td style={{ padding: "8px 12px", color: "rgba(255,255,255,0.9)", fontWeight: s.ownership === thisOwnership ? 600 : 400 }}>
-                                {s.ownership}{s.ownership === thisOwnership && <span style={{ marginLeft: 6, fontSize: 9, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.35)" }}>←</span>}
-                              </td>
-                              <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", fontWeight: 600, color: boroughScoreColor(s.avg_score) }}>{s.avg_score.toFixed(1)}</td>
-                              <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.35)" }}>{s.count.toLocaleString()}</td>
-                            </tr>
-                          ));
-                        })()}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-              </div>
-            )}
-            </div>
-          </div>
+          )}
 
           {/* ── FOOTER ── */}
           <div style={{
             marginTop: 48,
             paddingTop: 24,
             borderTop: "1px solid var(--navy-10)",
-            fontFamily: "'DM Mono', monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: 11,
             color: "var(--slate)",
             lineHeight: 1.6,
           }}>
-            <div style={{ marginBottom: 4 }}>
-              © 2026 Half Ave Company LLC. All rights reserved.
-            </div>
             <div style={{ marginBottom: 4 }}>
               Data sourced from NYC HPD, DOB, and ECB open data. Report generated by{" "}
               <a href="https://halfave.co" style={{ color: "var(--navy)", textDecoration: "underline" }}>Half Ave</a>.
