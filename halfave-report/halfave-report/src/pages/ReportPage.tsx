@@ -99,11 +99,6 @@ function severityColor(s?: string) {
   return "#c9a227";
 }
 
-function fmt(n?: number | null, fallback = "–") {
-  if (n == null) return fallback;
-  return n.toLocaleString();
-}
-
 function fmtDate(d?: string | null) {
   if (!d) return "–";
   return new Date(d).toLocaleDateString("en-US", {
@@ -1034,10 +1029,8 @@ export default function ReportPage(_props: ReportPageProps) {
   const bucket = score >= 80 ? "Healthy" : score >= 60 ? "Good" : score >= 40 ? "Fair" : "Watch";
 
   const openViolations = features?.open_violations ?? violations.filter((v) => v.is_open).length;
-  const recent12m = features?.recent_12m_violations ?? 0;
 
   // Financial exposure
-  const totalBalance = violations.reduce((s, v) => s + (v.balance_due ?? 0), 0);
 
   const scoreColor = riskColor(score);
 
