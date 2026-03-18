@@ -1706,6 +1706,7 @@ const bodyHTML = `<!-- NAV -->
       <p>NYC buildings produce a constant stream of operational data.<br>Half Ave turns that data into intelligence so you know exactly <strong>what matters and what to do next</strong>.</p>
       <div class="hero-actions">
         <a class="btn-primary" data-cal-link="susan-wu-l9yx2k/demo" data-cal-namespace="demo" data-cal-config='{"layout":"month_view","useSlotsViewOnSmallScreen":"true"}' style="cursor:pointer;">Get Early Access</a>
+        <a href="/risk.html" class="hero-text-link">NYC Risk Index →</a>
       </div>
     </div>
 
