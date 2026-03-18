@@ -1,11 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
-import { createClient } from "@supabase/supabase-js";
-
-// ─── Supabase ────────────────────────────────────────────────────────────────
-const supabase = createClient(
-  "https://mjkkzniagexfooclqsjr.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qa2t6bmlhZ2V4Zm9vY2xxc2pyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3NDc4OTUsImV4cCI6MjA4NjMyMzg5NX0.RuaeazBn_IFWfXOlQ0ZDDTPsnTApNGmE_WpPi0o52gQ"
-).schema("analytics");
+import { useEffect, useState } from "react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Building {
@@ -19,7 +12,7 @@ interface Building {
   year_built?: number | null;
   zipcode?: string | null;
   management_program?: string | null;
-  slug?: string | null;
+  slug?: string;
 }
 
 interface RiskScore {
@@ -973,60 +966,80 @@ export default function ReportPage(_props: ReportPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  useEffect(() => {
     try {
-      // Get BIN from URL params or window global
-      const params = new URLSearchParams(window.location.search);
-      const bin = params.get("bin") || (window as any).__halfaveBldg?.bin;
-      if (!bin) throw new Error("No building BIN specified.");
+      const payload = (window as any).__halfaveBldg;
+      if (!payload) throw new Error("No building data found.");
 
-      // Fetch building
-      const { data: bldgs, error: bErr } = await supabase
-        .from("buildings")
-        .select("*")
-        .eq("bin", bin)
-        .limit(1);
-      if (bErr) throw bErr;
-      if (!bldgs?.length) throw new Error(`No building found for BIN ${bin}`);
-      const bldg = bldgs[0];
-      setBuilding(bldg);
+      const b = payload.building ?? {};
+      const sc = payload.score ?? {};
+      const feat = payload.features ?? {};
+      const viols = payload.violations ?? {};
 
-      const buildingId = bldg.id;
+      setBuilding({
+        id: `bin-${b.bin}`,
+        bin: b.bin,
+        bbl: b.bbl ?? null,
+        address: b.address ?? "",
+        borough: b.borough ?? null,
+        stories: b.stories ? Number(b.stories) : null,
+        unit_count: b.units ? Number(b.units) : null,
+        year_built: b.yearBuilt ? Number(b.yearBuilt) : null,
+        zipcode: b.zipcode ?? null,
+        management_program: b.managementProgram ?? null,
+      });
 
-      // Parallel: risk score + features + violations
-      const [rsRes, ftRes, vRes] = await Promise.all([
-        supabase
-          .from("building_risk_scores")
-          .select("*")
-          .eq("building_id", buildingId)
-          .maybeSingle(),
-        supabase
-          .from("building_features")
-          .select("*")
-          .eq("building_id", buildingId)
-          .maybeSingle(),
-        supabase
-          .from("violations")
-          .select("*")
-          .eq("building_id", buildingId)
-          .order("issue_date", { ascending: false }),
-      ]);
+      setRiskScore({
+        health_score: sc.healthScore,
+        risk_score: sc.healthScore ?? 0,
+        risk_bucket: sc.riskBucket ?? "Watch",
+        percentile: sc.percentile ?? 0,
+        top_drivers: null,
+      });
 
-      if (rsRes.data) setRiskScore(rsRes.data);
-      if (ftRes.data) setFeatures(ftRes.data);
-      if (vRes.data) setViolations(vRes.data);
+      setFeatures({
+        open_violations:           feat.open_violations           ?? 0,
+        recent_12m_violations:     feat.recent_12m_violations     ?? 0,
+        severity_points:           feat.severity_points           ?? 0,
+        avg_open_age_days:         feat.avg_open_age_days         ?? 0,
+        violation_density:         feat.violation_density         ?? 0,
+        avg_resolution_days:       feat.avg_resolution_days       ?? 0,
+        resolution_rate:           feat.resolution_rate           ?? 0,
+        expired_tco:               feat.expired_tco               ?? false,
+        boiler_count:              feat.boiler_count              ?? 0,
+        boiler_avg_missed_years:   feat.boiler_avg_missed_years   ?? 0,
+        elevator_count:            feat.elevator_count            ?? 0,
+        elevator_avg_missed_years: feat.elevator_avg_missed_years ?? 0,
+      });
+
+      // Flatten violations from { hpd: { open, closed }, dob: ... } into Violation[]
+      const flattenAgency = (arr: any[], agency: string): Violation[] =>
+        (arr ?? []).map((v: any) => ({
+          id:             String(v.id ?? ""),
+          agency:         agency as Violation["agency"],
+          source:         agency,
+          severity:       v.cls ?? undefined,
+          violation_type: v.desc ?? undefined,
+          description:    v.desc ?? undefined,
+          is_open:        v.isOpen ?? false,
+          issue_date:     v.date ?? undefined,
+          close_date:     v.closeDate ?? undefined,
+          balance_due:    v.penalty ?? undefined,
+        }));
+
+      const allViolations: Violation[] = [
+        ...flattenAgency([...(viols.hpd?.open ?? []),  ...(viols.hpd?.closed ?? [])],  "HPD"),
+        ...flattenAgency([...(viols.dob?.open ?? []),  ...(viols.dob?.closed ?? [])],  "DOB"),
+        ...flattenAgency([...(viols.ecb?.open ?? []),  ...(viols.ecb?.closed ?? [])],  "ECB"),
+      ];
+
+      setViolations(allViolations);
     } catch (e: any) {
       setError(e?.message || "Failed to load report.");
     } finally {
       setLoading(false);
     }
   }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   if (loading) {
     return (
