@@ -106,42 +106,76 @@ export interface RiskSummary {
   top_buildings: Building[];
 }
 
+// ─── Edge function payload shapes ────────────────────────────────────────────
+export interface EdgeBuilding {
+  bin: string;
+  address: string;
+  borough: string;
+  boroName: string;
+  bbl: string;
+  stories: string;
+  units: string;
+  yearBuilt: string;
+  zipcode: string;
+  managementProgram: string;
+}
+
+export interface EdgeScore {
+  healthScore: number;
+  riskBucket: string;
+  percentile: number;
+  formulaVersion: string;
+}
+
+export interface EdgeFeatures {
+  open_violations: number;
+  severity_points: number;
+  violation_density: number;
+  avg_resolution_days: number;
+  expired_tco: boolean;
+  boiler_count: number;
+  boiler_avg_missed_years: number;
+  elevator_count: number;
+  elevator_avg_missed_years: number;
+  recent_12m_violations?: number;
+  avg_open_age_days?: number;
+  resolution_rate?: number;
+}
+
+export interface EdgeViolationItem {
+  id: string;
+  desc: string;
+  date: string;
+  cls: string;
+  isOpen: boolean;
+  penalty: number | null;
+  apt: string;
+  link?: string;
+}
+
+export interface EdgeViolations {
+  hpd:        { open: EdgeViolationItem[]; closed: EdgeViolationItem[] };
+  dob:        { open: EdgeViolationItem[]; closed: EdgeViolationItem[] };
+  ecb:        { open: EdgeViolationItem[]; closed: EdgeViolationItem[] };
+  sanitation: { open: EdgeViolationItem[]; closed: EdgeViolationItem[] };
+  dohmh:      { open: EdgeViolationItem[]; closed: EdgeViolationItem[] };
+}
+
 // ─── window.__halfaveBldg ────────────────────────────────────────────────────
 export interface HalfaveBldgWindow {
+  // Convenience fields used by MainSitePage
   bin: number | string;
   address: string;
-  bbl: string;
-  stories: string | number;
-  units: string | number;
-  yearBuilt?: string;
-  zipcode?: string;
   borough: string;
-  boroName?: string;
-  managementProgram?: string;
   riskScore: number;
   percentile: number;
   riskBucket: string;
-  openViolations?: number;
-  recent12m?: number;
-  balanceDue?: number;
-  elevatorCount?: number;
-  elevatorOverdue?: number;
-  boilerCount?: number;
-  expiredTco?: boolean;
-  hpdBuildingId?: string;
-  topDrivers?: string[];
-  violations?: {
-    hpd: { open: any[]; closed: any[] };
-    dob: { open: any[]; closed: any[] };
-    ecb: { open: any[]; closed: any[] };
-    oath: any[];
-    sanitation: any[];
-    dohmh: any[];
-    nypd: any[];
-  };
-  elevators?: any[];
-  boilers?: any[];
-  co?: any | null;
+
+  // Full edge function payload — passed through to ReportPage, no re-fetch needed
+  building: EdgeBuilding;
+  score: EdgeScore;
+  features: EdgeFeatures;
+  violations: EdgeViolations;
 }
 
 export type HalfaveWindow = Window & { __halfaveBldg?: HalfaveBldgWindow };
