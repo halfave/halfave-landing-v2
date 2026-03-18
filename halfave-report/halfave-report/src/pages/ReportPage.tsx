@@ -885,8 +885,10 @@ function ComplianceSection({ violations, devices, co }: {
 }) {
   const openByAgency = (t: string) => violations.filter(v => v.is_open && v.agency === t);
   const violTabs: ("HPD"|"DOB"|"ECB")[] = ["HPD","DOB","ECB"];
-  const hasBoilers   = devices.boilers.length > 0;
-  const hasElevators = devices.elevators.length > 0;
+  const overdueBoilers   = devices.boilers.filter((b: any) => b.missed_years > 1 && (b.status||'').toLowerCase().includes('accept'));
+  const hasBoilers   = overdueBoilers.length > 0;
+  const overdueElevators = devices.elevators.filter((e: any) => e.missed_years > 1 && (e.status||'').toUpperCase().includes('ACTIVE'));
+  const hasElevators = overdueElevators.length > 0;
   const hasCo        = co && !co.is_final;
   const hasInspections = hasBoilers || hasElevators || hasCo;
 
@@ -910,7 +912,7 @@ function ComplianceSection({ violations, devices, co }: {
           <button className={`rp-tab-btn ${activeTab === "Inspections" ? "active" : ""}`} onClick={() => setActiveTab("Inspections")}>
             Inspections
             <span className="rp-tab-count" style={{ background: "var(--risk-amber)", color: "#fff" }}>
-              {[hasCo, hasBoilers, hasElevators].filter(Boolean).length}
+              {(hasCo ? 1 : 0) + overdueBoilers.length + overdueElevators.length}
             </span>
           </button>
         )}
@@ -946,10 +948,10 @@ function ComplianceSection({ violations, devices, co }: {
           {hasBoilers && (
             <div className="rp-card" style={{ marginBottom: 16 }}>
               <div style={{ padding: "12px 20px 8px", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "var(--slate)", borderBottom: "1px solid var(--navy-10)" }}>
-                Boilers — {devices.boilers.length} device{devices.boilers.length !== 1 ? "s" : ""}
+                Boilers — {overdueBoilers.length} overdue device{overdueBoilers.length !== 1 ? "s" : ""}
               </div>
               <div className="rp-device-grid">
-                {devices.boilers.map((b: any, i: number) => {
+                {overdueBoilers.map((b: any, i: number) => {
                   const overdue = b.missed_years > 1;
                   return (
                     <div className="rp-device-row" key={i}>
@@ -967,10 +969,10 @@ function ComplianceSection({ violations, devices, co }: {
           {hasElevators && (
             <div className="rp-card">
               <div style={{ padding: "12px 20px 8px", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "var(--slate)", borderBottom: "1px solid var(--navy-10)" }}>
-                Elevators — {devices.elevators.length} device{devices.elevators.length !== 1 ? "s" : ""}
+                Elevators — {overdueElevators.length} overdue device{overdueElevators.length !== 1 ? "s" : ""}
               </div>
               <div className="rp-device-grid">
-                {devices.elevators.map((e: any, i: number) => {
+                {overdueElevators.map((e: any, i: number) => {
                   const overdue = e.missed_years > 1;
                   return (
                     <div className="rp-device-row" key={i}>
@@ -1143,7 +1145,7 @@ export default function ReportPage(_props: ReportPageProps) {
         {/* ── HERO ── */}
         <div className="rp-hero">
           <div className="rp-hero-inner">
-            <div className="rp-hero-eyebrow">NYC Building Risk Report · Half Ave</div>
+            <div className="rp-hero-eyebrow">Building Health Index</div>
             <div className="rp-hero-address">{building.address}</div>
             <div className="rp-hero-meta">
               <span>{BOROUGH_NAMES[String(building.borough)] ?? "NYC"}</span>
