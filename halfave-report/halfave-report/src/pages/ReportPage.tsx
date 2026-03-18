@@ -77,12 +77,6 @@ function riskColor(score: number) {
   return "var(--risk-red)";
 }
 
-function riskBg(score: number) {
-  if (score >= 80) return "var(--risk-green-bg)";
-  if (score >= 60) return "var(--risk-amber-bg)";
-  return "var(--risk-red-bg)";
-}
-
 function severityWeight(s?: string) {
   if (!s) return 0;
   const u = s.toUpperCase();
@@ -153,19 +147,11 @@ const CSS = `
 
   /* ── HERO ── */
   .rp-hero {
-    background: var(--navy);
-    padding: 48px 24px 0;
-    position: relative;
-    overflow: hidden;
+    background: var(--bg);
+    padding: 48px 24px 32px;
+    border-bottom: 1px solid var(--navy-10);
   }
-  .rp-hero::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(ellipse 80% 60% at 50% 120%, rgba(196,83,58,0.18) 0%, transparent 70%);
-    pointer-events: none;
-  }
-  .rp-hero-inner { max-width: 860px; margin: 0 auto; position: relative; }
+  .rp-hero-inner { max-width: 860px; margin: 0 auto; }
   .rp-hero-eyebrow {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -176,111 +162,32 @@ const CSS = `
   }
   .rp-hero-address {
     font-family: var(--font-serif);
-    font-size: clamp(22px, 4vw, 34px);
-    font-weight: 700;
-    color: #fff;
+    font-size: clamp(22px, 4vw, 40px);
+    font-weight: 500;
+    color: var(--navy);
     line-height: 1.15;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
   }
   .rp-hero-meta {
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--slate);
-    margin-bottom: 36px;
+    margin-bottom: 28px;
     display: flex;
     gap: 16px;
     flex-wrap: wrap;
   }
   .rp-hero-meta span::before { content: '· '; }
   .rp-hero-meta span:first-child::before { content: ''; }
-
-  .rp-score-row {
-    display: flex;
-    align-items: flex-end;
-    gap: 24px;
-    padding-bottom: 36px;
-    flex-wrap: wrap;
+  .rp-hero-summary {
+    font-size: 1rem;
+    color: #6b7280;
+    max-width: 620px;
+    line-height: 1.6;
+    margin-bottom: 0;
   }
-  .rp-score-dial {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-  }
-  .rp-score-circle {
-    width: 96px;
-    height: 96px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: var(--font-mono);
-    font-size: 30px;
-    font-weight: 700;
-    border: 3px solid;
-    position: relative;
-  }
-  .rp-score-label {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--slate);
-  }
-  .rp-score-badge {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    padding: 4px 10px;
-    border-radius: 4px;
-    margin-top: 6px;
-  }
-
-  .rp-kpi-row {
-    display: flex;
-    gap: 0;
-    border-left: 1px solid rgba(255,255,255,0.08);
-  }
-  .rp-kpi {
-    padding: 0 28px;
-    border-right: 1px solid rgba(255,255,255,0.08);
-  }
-  .rp-kpi-val {
-    font-family: var(--font-mono);
-    font-size: 28px;
-    font-weight: 700;
-    color: #fff;
-    line-height: 1;
-  }
-  .rp-kpi-lbl {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--slate);
-    margin-top: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-
-  /* ── SCORE BAND ── */
-  .rp-band {
-    height: 6px;
-    background: linear-gradient(to right, #c4533a 0%, #c9a227 50%, #3a7d5e 100%);
-    position: relative;
-    margin-top: 0;
-  }
-  .rp-band-marker {
-    position: absolute;
-    top: -4px;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: #fff;
-    border: 3px solid var(--navy);
-    transform: translateX(-50%);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-  }
+  .rp-hero-summary strong { color: var(--navy); font-weight: 600; }
 
   /* ── BODY ── */
   .rp-body { max-width: 860px; margin: 0 auto; padding: 36px 24px 80px; font-family: 'Inter', -apple-system, sans-serif; }
@@ -1133,10 +1040,6 @@ export default function ReportPage(_props: ReportPageProps) {
   const totalBalance = violations.reduce((s, v) => s + (v.balance_due ?? 0), 0);
 
   const scoreColor = riskColor(score);
-  const scoreBg = riskBg(score);
-  const bandPct = (score / 100) * 100;
-
-  // Peer comparison data (NYC averages rough estimates)
 
   return (
     <>
@@ -1145,7 +1048,7 @@ export default function ReportPage(_props: ReportPageProps) {
         {/* ── HERO ── */}
         <div className="rp-hero">
           <div className="rp-hero-inner">
-            <div className="rp-hero-eyebrow">Building Health Index</div>
+            <div className="rp-hero-eyebrow">NYC Building Health Index</div>
             <div className="rp-hero-address">{building.address}</div>
             <div className="rp-hero-meta">
               <span>{BOROUGH_NAMES[String(building.borough)] ?? "NYC"}</span>
@@ -1155,54 +1058,15 @@ export default function ReportPage(_props: ReportPageProps) {
               {building.year_built && <span>Built {building.year_built}</span>}
               {building.bin && <span>BIN {building.bin}</span>}
             </div>
-
-            <div className="rp-score-row">
-              <div className="rp-score-dial">
-                <div
-                  className="rp-score-circle"
-                  style={{ color: scoreColor, borderColor: scoreColor, background: scoreBg }}
-                >
-                  {score}
-                </div>
-                <div className="rp-score-label">Building Health Index</div>
-                <div
-                  className="rp-score-badge"
-                  style={{ background: scoreColor + "22", color: scoreColor }}
-                >
-                  {bucket}
-                </div>
-              </div>
-
-              <div className="rp-kpi-row">
-                <div className="rp-kpi">
-                  <div className="rp-kpi-val">{fmt(openViolations)}</div>
-                  <div className="rp-kpi-lbl">Open Violations</div>
-                </div>
-                <div className="rp-kpi">
-                  <div className="rp-kpi-val">{fmt(recent12m)}</div>
-                  <div className="rp-kpi-lbl">Last 12 Months</div>
-                </div>
-                <div className="rp-kpi">
-                  <div className="rp-kpi-val">{pct >= 99 ? "99.9" : pct.toFixed(0)}th</div>
-                  <div className="rp-kpi-lbl">Percentile</div>
-                </div>
-                {totalBalance > 0 && (
-                  <div className="rp-kpi">
-                    <div className="rp-kpi-val" style={{ color: "var(--risk-red)" }}>
-                      {fmtCurrency(totalBalance)}
-                    </div>
-                    <div className="rp-kpi-lbl">Balance Due</div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Score band */}
-          <div style={{ maxWidth: 860, margin: "0 auto" }}>
-            <div className="rp-band">
-              <div className="rp-band-marker" style={{ left: `${bandPct}%` }} />
-            </div>
+            <p className="rp-hero-summary">
+              {building.address.split(',')[0]} has a health index of{" "}
+              <strong style={{ color: scoreColor }}>{score} — {bucket}</strong>,
+              {pct > 50
+                ? <> ranking in the <strong>{pct >= 99 ? "99th" : `${pct.toFixed(0)}th`} percentile</strong> — better than {pct.toFixed(0)}% of comparable NYC buildings.</>
+                : <> ranking in the <strong>{pct.toFixed(0)}th percentile</strong> among comparable NYC buildings.</>
+              }
+              {openViolations > 0 && <> There {openViolations === 1 ? "is" : "are"} currently <strong>{openViolations} open violation{openViolations !== 1 ? "s" : ""}</strong> on record.</>}
+            </p>
           </div>
         </div>
 
