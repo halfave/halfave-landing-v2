@@ -142,9 +142,9 @@ const CSS = `
 
   /* ── HERO ── */
   .rp-hero {
-    background: var(--bg);
-    padding: 48px 24px 32px;
-    border-bottom: 1px solid var(--navy-10);
+    background: #f7f4ef;
+    padding: 48px 24px 40px;
+    border-bottom: 1px solid rgba(17,30,48,0.08);
   }
   .rp-hero-inner { max-width: 860px; margin: 0 auto; }
   .rp-hero-eyebrow {
@@ -186,33 +186,28 @@ const CSS = `
 
   /* ── BODY ── */
   .rp-body { max-width: 860px; margin: 0 auto; padding: 36px 24px 80px; font-family: 'Inter', -apple-system, sans-serif; }
+  .rp-root { background: #f7f4ef; }
 
   /* ── SECTION ── */
-  .rp-section { margin-bottom: 40px; }
+  .rp-section { margin-bottom: 24px; background: #fff; border-radius: 20px; padding: 2rem; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
   .rp-section-title {
-    font-family: 'Lora', Georgia, serif;
-    font-weight: 600;
-    font-size: 11px;
-    letter-spacing: 0.14em;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--slate);
-    margin-bottom: 16px;
+    color: #9ca3af;
+    margin-bottom: 1.25rem;
     display: flex;
     align-items: center;
     gap: 10px;
   }
-  .rp-section-title::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--navy-10);
-  }
 
   /* ── CARD ── */
   .rp-card {
-    background: var(--cream);
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--navy-10);
+    background: #f9fafb;
+    border-radius: 12px;
+    border: 1px solid rgba(17,30,48,0.06);
     overflow: hidden;
   }
 
@@ -258,13 +253,13 @@ const CSS = `
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 1px;
-    background: var(--navy-10);
-    border-radius: var(--radius-lg);
+    background: rgba(17,30,48,0.06);
+    border-radius: 12px;
     overflow: hidden;
-    border: 1px solid var(--navy-10);
+    border: 1px solid rgba(17,30,48,0.06);
   }
   .rp-stat {
-    background: var(--cream);
+    background: #f9fafb;
     padding: 18px 20px;
   }
   .rp-stat-val {
@@ -363,10 +358,10 @@ const CSS = `
 
   /* ── VIOLATION TABLE ── */
   .rp-vtable-wrap {
-    border: 1px solid var(--navy-10);
-    border-radius: 0 0 var(--radius) var(--radius);
+    border: 1px solid rgba(17,30,48,0.06);
+    border-radius: 12px;
     overflow: hidden;
-    background: var(--cream);
+    background: #fff;
   }
   .rp-vtable { width: 100%; border-collapse: collapse; }
   .rp-vtable thead th {
@@ -462,9 +457,9 @@ const CSS = `
     font-family: var(--font-mono);
     font-size: 12px;
     letter-spacing: 0.06em;
-    background: var(--bg);
+    background: #f9fafb;
     border: none;
-    border-top: 1px solid var(--navy-10);
+    border-top: 1px solid rgba(17,30,48,0.06);
     color: var(--slate);
     cursor: pointer;
     text-align: center;
