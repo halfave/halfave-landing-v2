@@ -665,6 +665,65 @@ const CSS = `
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* ── DEVICE CARDS ── */
+  .rp-device-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .rp-device-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--navy-10);
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .rp-device-row:last-child { border-bottom: none; }
+  .rp-device-id {
+    font-weight: 700;
+    color: var(--navy);
+    min-width: 80px;
+  }
+  .rp-device-status {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .rp-device-status.ok   { background: var(--risk-green-bg); color: var(--risk-green); }
+  .rp-device-status.warn { background: var(--risk-red-bg);   color: var(--risk-red);   }
+  .rp-device-date {
+    margin-left: auto;
+    color: var(--slate);
+    font-size: 11px;
+    text-align: right;
+  }
+  .rp-device-date.overdue { color: var(--risk-red); font-weight: 700; }
+  .rp-tco-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px 20px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .rp-tco-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+  }
+  .rp-tco-badge.expired { background: var(--risk-red-bg);   color: var(--risk-red);   }
+  .rp-tco-badge.expiring{ background: var(--risk-amber-bg); color: var(--risk-amber); }
+  .rp-tco-badge.final   { background: var(--risk-green-bg); color: var(--risk-green); }
+
   @media (max-width: 600px) {
     .rp-kpi-row { flex-wrap: wrap; }
     .rp-kpi { padding: 0 16px; margin-bottom: 16px; }
@@ -781,7 +840,7 @@ function ViolationRow({ v, expanded, onToggle }: {
 // ─── Violation Tabs ────────────────────────────────────────────────────────────
 type SortKey = "severity" | "issue_date" | "is_open" | "violation_type";
 
-function ViolationTabs({ violations, features }: { violations: Violation[]; features: BuildingFeatures | null }) {
+function ViolationTabs({ violations }: { violations: Violation[] }) {
   const [tab, setTab] = useState<"HPD" | "DOB" | "ECB">("HPD");
   const [sortKey, setSortKey] = useState<SortKey>("severity");
   const [sortAsc, setSortAsc] = useState(false);
@@ -806,27 +865,7 @@ function ViolationTabs({ violations, features }: { violations: Violation[]; feat
     return sortAsc ? -cmp : cmp;
   });
 
-  // Synthetic infra alert rows (shown only on HPD tab at top)
-  const infraAlerts: Violation[] = tab === "HPD" ? [
-    ...(features?.expired_tco ? [{
-      id: "__tco__", agency: "HPD" as const, source: "TCO", severity: "C",
-      violation_type: "Expired or Missing Certificate of Occupancy",
-      description: "Building's Temporary CO has expired. Residents may be occupying without valid authorization.",
-      is_open: true, issue_date: undefined,
-    }] : []),
-    ...((features?.boiler_avg_missed_years ?? 0) > 1 ? [{
-      id: "__boiler__", agency: "HPD" as const, source: "Boiler", severity: "B",
-      violation_type: `Boiler Inspection Overdue — ${features!.boiler_count} boiler${features!.boiler_count !== 1 ? "s" : ""}, avg ${features!.boiler_avg_missed_years.toFixed(1)} missed years`,
-      description: "DOB boiler inspection records show missed annual inspections.",
-      is_open: true, issue_date: undefined,
-    }] : []),
-    ...((features?.elevator_avg_missed_years ?? 0) > 1 ? [{
-      id: "__elev__", agency: "HPD" as const, source: "Elevator", severity: "B",
-      violation_type: `Elevator Inspection Overdue — ${features!.elevator_count} elevator${features!.elevator_count !== 1 ? "s" : ""}, avg ${features!.elevator_avg_missed_years.toFixed(1)} missed years`,
-      description: "DOB elevator inspection records show missed CAT1 or periodic inspections.",
-      is_open: true, issue_date: undefined,
-    }] : []),
-  ] : [];
+  const infraAlerts: Violation[] = []; // infra alerts shown as device cards, not violation rows
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortAsc(!sortAsc);
@@ -986,6 +1025,8 @@ export default function ReportPage(_props: ReportPageProps) {
   const [riskScore, setRiskScore] = useState<RiskScore | null>(null);
   const [features, setFeatures] = useState<BuildingFeatures | null>(null);
   const [violations, setViolations] = useState<Violation[]>([]);
+  const [devices, setDevices] = useState<any>({ boilers: [], elevators: [] });
+  const [co, setCo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -998,6 +1039,8 @@ export default function ReportPage(_props: ReportPageProps) {
       const sc = payload.score ?? {};
       const feat = payload.features ?? {};
       const viols = payload.violations ?? {};
+      const devs = payload.devices ?? { boilers: [], elevators: [] };
+      const coData = payload.co ?? null;
 
       setBuilding({
         id: `bin-${b.bin}`,
@@ -1057,6 +1100,8 @@ export default function ReportPage(_props: ReportPageProps) {
       ];
 
       setViolations(allViolations);
+      setDevices(devs);
+      setCo(coData);
     } catch (e: any) {
       setError(e?.message || "Failed to load report.");
     } finally {
@@ -1315,6 +1360,92 @@ export default function ReportPage(_props: ReportPageProps) {
             </div>
           )}
 
+          {/* ── INSPECTIONS & CO ── */}
+          {(devices.boilers.length > 0 || devices.elevators.length > 0 || co) && (
+            <div className="rp-section">
+              <div className="rp-section-title">Inspections & Certificates</div>
+
+              {/* Certificate of Occupancy */}
+              {co && (
+                <div className="rp-card" style={{ marginBottom: 16 }}>
+                  <div className="rp-tco-card">
+                    <span className={`rp-tco-badge ${co.is_final ? "final" : co.expired ? "expired" : "expiring"}`}>
+                      {co.is_final ? "Final CO" : co.expired ? "TCO Expired" : "Temp CO"}
+                    </span>
+                    <div>
+                      <div style={{ fontWeight: 700, color: "var(--navy)", marginBottom: 3 }}>
+                        Certificate of Occupancy
+                      </div>
+                      {co.issued_date && (
+                        <div style={{ color: "var(--slate)" }}>
+                          Issued {fmtDate(co.issued_date)}
+                          {!co.is_final && (
+                            <span style={{ color: co.expired ? "var(--risk-red)" : "var(--risk-amber)", marginLeft: 10, fontWeight: 700 }}>
+                              {co.expired ? "— TCO expired" : `— expires ${fmtDate(new Date(new Date(co.issued_date).setMonth(new Date(co.issued_date).getMonth() + 3)).toISOString())}`}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Boilers */}
+              {devices.boilers.length > 0 && (
+                <div className="rp-card" style={{ marginBottom: 16 }}>
+                  <div style={{ padding: "12px 20px 8px", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)", borderBottom: "1px solid var(--navy-10)" }}>
+                    Boilers — {devices.boilers.length} device{devices.boilers.length !== 1 ? "s" : ""}
+                  </div>
+                  <div className="rp-device-grid">
+                    {devices.boilers.map((b: any, i: number) => {
+                      const overdue = b.missed_years > 1;
+                      return (
+                        <div className="rp-device-row" key={i}>
+                          <span className="rp-device-id">{b.id}</span>
+                          <span className={`rp-device-status ${overdue ? "warn" : "ok"}`}>
+                            {overdue ? "Overdue" : "Current"}
+                          </span>
+                          <span className={`rp-device-date ${overdue ? "overdue" : ""}`}>
+                            {b.last_insp ? <>Last insp: {fmtDate(b.last_insp)}{overdue && <> · {b.missed_years.toFixed(1)}yr overdue</>}</> : "No inspection on record"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Elevators */}
+              {devices.elevators.length > 0 && (
+                <div className="rp-card">
+                  <div style={{ padding: "12px 20px 8px", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)", borderBottom: "1px solid var(--navy-10)" }}>
+                    Elevators — {devices.elevators.length} device{devices.elevators.length !== 1 ? "s" : ""}
+                  </div>
+                  <div className="rp-device-grid">
+                    {devices.elevators.map((e: any, i: number) => {
+                      const overdue = e.missed_years > 1;
+                      return (
+                        <div className="rp-device-row" key={i}>
+                          <span className="rp-device-id">#{e.id}</span>
+                          <span className={`rp-device-status ${overdue ? "warn" : "ok"}`}>
+                            {overdue ? "Overdue" : "Current"}
+                          </span>
+                          <div className={`rp-device-date ${overdue ? "overdue" : ""}`}>
+                            {e.cat1_date && <div>CAT1: {fmtDate(e.cat1_date)}</div>}
+                            {e.pvt_date  && <div>PVT: {fmtDate(e.pvt_date)}</div>}
+                            {!e.cat1_date && !e.pvt_date && <div>No inspection on record</div>}
+                            {overdue && <div>{e.missed_years.toFixed(1)}yr overdue</div>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── VIOLATIONS ── */}
           {violations.length > 0 && (
             <div className="rp-section">
@@ -1324,7 +1455,7 @@ export default function ReportPage(_props: ReportPageProps) {
                   {violations.filter(v => v.is_open).length} open · click row to expand
                 </span>
               </div>
-              <ViolationTabs violations={violations} features={features} />
+              <ViolationTabs violations={violations} />
             </div>
           )}
 
