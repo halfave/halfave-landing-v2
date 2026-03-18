@@ -1461,8 +1461,7 @@ export default function ReportPage(_props: ReportPageProps) {
                       {myYear>=1900&&myYear<=2020&&myScore>0&&(()=>{
                         const myDecade = Math.round(myYear/10)*10;
                         const snapDecade = Math.min(2020, Math.max(1900, myDecade));
-                        const lineRow = SIZE_DATA.find(r=>r.decade===snapDecade&&r.size_band===mySize);
-                        const dotY = lineRow ? PT+yS(lineRow.avg_score) : PT+yS(myScore);
+                        const dotY = PT+yS(myScore);
                         const color = SIZE_COLORS[mySize];
                         return (
                           <>
@@ -1616,7 +1615,7 @@ export default function ReportPage(_props: ReportPageProps) {
               <div className="rp-section">
                 <div className="rp-section-title">The Top 10 List</div>
                 <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: '#6b7280', marginBottom: 20 }}>
-                  Ranked by average building health score across NYC rental properties (min. 50 buildings per ZIP code)
+                  Ranked by average building health score across NYC rental properties, reflecting compliance performance, violations, and inspection outcomes (minimum 50 buildings per ZIP code)
                 </div>
                 {(() => {
                   const LeaderboardList = ({ data, label }: { data: typeof top10; label: string }) => (
