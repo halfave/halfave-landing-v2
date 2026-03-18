@@ -33,9 +33,17 @@ export interface Building {
   management_program?: string | null;
   slug?: string | null;
   risk_score?: number | null;
+  health_score?: number | null;
   risk_bucket?: RiskBucket | string | null;
   percentile?: number | null;
   top_drivers?: string[] | null;
+  // Full edge function payload, passed through from MainSitePage to ReportPage
+  _payload?: {
+    building: EdgeBuilding;
+    score: EdgeScore;
+    features: EdgeFeatures;
+    violations: EdgeViolations;
+  } | null;
 }
 
 export interface RiskScore {
