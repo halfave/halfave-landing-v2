@@ -496,8 +496,8 @@ const CSS = `
   .rp-vtable tbody tr.expandable { cursor: pointer; }
   .rp-vtable td {
     padding: 10px 14px;
-    font-family: var(--font-mono);
-    font-size: 12px;
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 13px;
     color: var(--navy);
     vertical-align: top;
   }
@@ -532,7 +532,7 @@ const CSS = `
   }
   .rp-expand-inner {
     padding: 14px 20px;
-    font-family: var(--font-serif);
+    font-family: 'Inter', -apple-system, sans-serif;
     font-size: 13px;
     line-height: 1.6;
     color: var(--navy);
@@ -1317,8 +1317,8 @@ export default function ReportPage(_props: ReportPageProps) {
                           <span className={`rp-device-status ${overdue ? "warn" : "ok"}`}>
                             {overdue ? "Overdue" : "Current"}
                           </span>
-                          <span className={`rp-device-date ${overdue ? "overdue" : ""}`}>
-                            {b.last_insp ? <>Last insp: {fmtDate(b.last_insp)}{overdue && <> · {b.missed_years.toFixed(1)}yr overdue</>}</> : "No inspection on record"}
+                          <span className="rp-device-date" style={{ color: !b.last_insp ? "var(--risk-amber)" : overdue ? "var(--risk-red)" : "var(--slate)" }}>
+                            {b.last_insp ? <>Last insp: {fmtDate(b.last_insp)}{overdue && <span style={{marginLeft:8}}>· {b.missed_years.toFixed(1)}yr ago</span>}</> : "No inspection on record"}
                           </span>
                         </div>
                       );
@@ -1342,11 +1342,13 @@ export default function ReportPage(_props: ReportPageProps) {
                           <span className={`rp-device-status ${overdue ? "warn" : "ok"}`}>
                             {overdue ? "Overdue" : "Current"}
                           </span>
-                          <div className={`rp-device-date ${overdue ? "overdue" : ""}`}>
-                            {e.cat1_date && <div>CAT1: {fmtDate(e.cat1_date)}</div>}
-                            {e.pvt_date  && <div>PVT: {fmtDate(e.pvt_date)}</div>}
-                            {!e.cat1_date && !e.pvt_date && <div>No inspection on record</div>}
-                            {overdue && <div>{e.missed_years.toFixed(1)}yr overdue</div>}
+                          <div className="rp-device-date">
+                            <div style={{ color: e.cat1_date ? (e.missed_years > 1 ? "var(--risk-red)" : "var(--slate)") : "var(--risk-amber)" }}>
+                              CAT1: {e.cat1_date ? fmtDate(e.cat1_date) : "None on record"}
+                            </div>
+                            <div style={{ color: e.pvt_date ? (e.missed_years > 1 ? "var(--risk-red)" : "var(--slate)") : "var(--risk-amber)" }}>
+                              PVT: {e.pvt_date ? fmtDate(e.pvt_date) : "None on record"}
+                            </div>
                           </div>
                         </div>
                       );
