@@ -1616,7 +1616,7 @@ export default function ReportPage(_props: ReportPageProps) {
               <div className="rp-section">
                 <div className="rp-section-title">The Top 10 List</div>
                 <div style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: '#6b7280', marginBottom: 20 }}>
-                  Ranked by average building health score across NYC rental properties, reflecting compliance performance, violations, and inspection outcomes (minimum 50 buildings per ZIP code).
+                  Ranked by average building health score across NYC rental properties (min. 50 buildings per ZIP code)
                 </div>
                 {(() => {
                   const LeaderboardList = ({ data, label }: { data: typeof top10; label: string }) => (
