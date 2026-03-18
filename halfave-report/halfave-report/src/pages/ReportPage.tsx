@@ -129,6 +129,7 @@ function fmtCurrency(n?: number | null) {
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
 const CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
   :root {
     --navy: #111e30;
     --cream: #f7f4ef;
@@ -143,12 +144,13 @@ const CSS = `
     --navy-10: rgba(17,30,48,0.08);
     --navy-20: rgba(17,30,48,0.15);
     --font-serif: 'Lora', Georgia, serif;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'DM Mono', 'Courier New', monospace;
     --radius: 12px;
     --radius-lg: 16px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--navy); font-family: var(--font-serif); }
+  body { background: var(--bg); color: var(--navy); font-family: 'Inter', -apple-system, sans-serif; }
 
   .rp-root { min-height: 100vh; background: var(--bg); }
 
@@ -284,12 +286,13 @@ const CSS = `
   }
 
   /* ── BODY ── */
-  .rp-body { max-width: 860px; margin: 0 auto; padding: 36px 24px 80px; }
+  .rp-body { max-width: 860px; margin: 0 auto; padding: 36px 24px 80px; font-family: 'Inter', -apple-system, sans-serif; }
 
   /* ── SECTION ── */
   .rp-section { margin-bottom: 40px; }
   .rp-section-title {
-    font-family: var(--font-mono);
+    font-family: 'Lora', Georgia, serif;
+    font-weight: 600;
     font-size: 11px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -895,18 +898,24 @@ function ViolationTabs({ violations }: { violations: Violation[] }) {
 
   return (
     <div>
-      <div className="rp-tabs-nav">
-        {tabs.map((t) => (
-          <button
-            key={t}
-            className={`rp-tab-btn ${tab === t ? "active" : ""}`}
-            onClick={() => { setTab(t); setPage(20); }}
-          >
-            {t}
-            <span className="rp-tab-count">{byAgency[t].filter(v => v.is_open).length}</span>
-          </button>
-        ))}
-      </div>
+      {(() => {
+        const visibleTabs = tabs.filter(t => byAgency[t].some(v => v.is_open));
+        if (visibleTabs.length === 0) return null;
+        return (
+          <div className="rp-tabs-nav">
+            {visibleTabs.map((t) => (
+              <button
+                key={t}
+                className={`rp-tab-btn ${tab === t ? "active" : ""}`}
+                onClick={() => { setTab(t); setPage(20); }}
+              >
+                {t}
+                <span className="rp-tab-count">{byAgency[t].filter(v => v.is_open).length}</span>
+              </button>
+            ))}
+          </div>
+        );
+      })()}
 
       {current.length === 0 ? (
         <div style={{ padding: "32px 20px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--slate)" }}>
@@ -914,20 +923,7 @@ function ViolationTabs({ violations }: { violations: Violation[] }) {
         </div>
       ) : (
         <>
-          <div className="rp-vsummary">
-            <div className="rp-vsum-cell">
-              <div className="rp-vsum-num" style={{ color: "var(--risk-red)" }}>{openOnly.length + (tab === "HPD" ? infraAlerts.length : 0)}</div>
-              <div className="rp-vsum-lbl">Open</div>
-            </div>
-            <div className="rp-vsum-cell">
-              <div className="rp-vsum-num">{openOnly.filter((v) => v.severity === "C" || v.severity === "CLASS - 1").length}</div>
-              <div className="rp-vsum-lbl">High Severity</div>
-            </div>
-            <div className="rp-vsum-cell">
-              <div className="rp-vsum-num" style={{ color: "var(--risk-green)" }}>{closed.length}</div>
-              <div className="rp-vsum-lbl">Closed</div>
-            </div>
-          </div>
+
           <div className="rp-vtable-wrap">
             <table className="rp-vtable">
               <thead>
@@ -1262,6 +1258,107 @@ export default function ReportPage(_props: ReportPageProps) {
 
 
 
+          {/* ── VIOLATIONS ── */}
+          {violations.length > 0 && (
+            <div className="rp-section">
+              <div className="rp-section-title">
+                Open Violations
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                  {violations.filter(v => v.is_open).length} open · click row to expand
+                </span>
+              </div>
+              <ViolationTabs violations={violations} />
+            </div>
+          )}
+
+
+          {/* ── INSPECTIONS & CO ── */}
+          {(devices.boilers.length > 0 || devices.elevators.length > 0 || co) && (
+            <div className="rp-section">
+              <div className="rp-section-title">Inspections & Certificates</div>
+
+              {/* Certificate of Occupancy */}
+              {co && !co.is_final && (
+                <div className="rp-card" style={{ marginBottom: 16 }}>
+                  <div className="rp-tco-card">
+                    <span className={`rp-tco-badge ${co.is_final ? "final" : co.expired ? "expired" : "expiring"}`}>
+                      {co.is_final ? "Final CO" : co.expired ? "TCO Expired" : "Temp CO"}
+                    </span>
+                    <div>
+                      <div style={{ fontWeight: 700, color: "var(--navy)", marginBottom: 3 }}>
+                        Certificate of Occupancy
+                      </div>
+                      {co.issued_date && (
+                        <div style={{ color: "var(--slate)" }}>
+                          Issued {fmtDate(co.issued_date)}
+                          {!co.is_final && (
+                            <span style={{ color: co.expired ? "var(--risk-red)" : "var(--risk-amber)", marginLeft: 10, fontWeight: 700 }}>
+                              {co.expired ? "— TCO expired" : `— expires ${fmtDate(new Date(new Date(co.issued_date).setMonth(new Date(co.issued_date).getMonth() + 3)).toISOString())}`}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Boilers */}
+              {devices.boilers.length > 0 && (
+                <div className="rp-card" style={{ marginBottom: 16 }}>
+                  <div style={{ padding: "12px 20px 8px", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)", borderBottom: "1px solid var(--navy-10)" }}>
+                    Boilers — {devices.boilers.length} device{devices.boilers.length !== 1 ? "s" : ""}
+                  </div>
+                  <div className="rp-device-grid">
+                    {devices.boilers.map((b: any, i: number) => {
+                      const overdue = b.missed_years > 1;
+                      return (
+                        <div className="rp-device-row" key={i}>
+                          <span className="rp-device-id">{b.id}</span>
+                          <span className={`rp-device-status ${overdue ? "warn" : "ok"}`}>
+                            {overdue ? "Overdue" : "Current"}
+                          </span>
+                          <span className={`rp-device-date ${overdue ? "overdue" : ""}`}>
+                            {b.last_insp ? <>Last insp: {fmtDate(b.last_insp)}{overdue && <> · {b.missed_years.toFixed(1)}yr overdue</>}</> : "No inspection on record"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Elevators */}
+              {devices.elevators.length > 0 && (
+                <div className="rp-card">
+                  <div style={{ padding: "12px 20px 8px", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)", borderBottom: "1px solid var(--navy-10)" }}>
+                    Elevators — {devices.elevators.length} device{devices.elevators.length !== 1 ? "s" : ""}
+                  </div>
+                  <div className="rp-device-grid">
+                    {devices.elevators.map((e: any, i: number) => {
+                      const overdue = e.missed_years > 1;
+                      return (
+                        <div className="rp-device-row" key={i}>
+                          <span className="rp-device-id">#{e.id}</span>
+                          <span className={`rp-device-status ${overdue ? "warn" : "ok"}`}>
+                            {overdue ? "Overdue" : "Current"}
+                          </span>
+                          <div className={`rp-device-date ${overdue ? "overdue" : ""}`}>
+                            {e.cat1_date && <div>CAT1: {fmtDate(e.cat1_date)}</div>}
+                            {e.pvt_date  && <div>PVT: {fmtDate(e.pvt_date)}</div>}
+                            {!e.cat1_date && !e.pvt_date && <div>No inspection on record</div>}
+                            {overdue && <div>{e.missed_years.toFixed(1)}yr overdue</div>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+
           {/* ── RISK DRIVERS ── */}
           {drivers.length > 0 && (
             <div className="rp-section">
@@ -1357,105 +1454,6 @@ export default function ReportPage(_props: ReportPageProps) {
               <div style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--slate)" }}>
                 Gray marker = NYC building average. Bar = this building.
               </div>
-            </div>
-          )}
-
-          {/* ── INSPECTIONS & CO ── */}
-          {(devices.boilers.length > 0 || devices.elevators.length > 0 || co) && (
-            <div className="rp-section">
-              <div className="rp-section-title">Inspections & Certificates</div>
-
-              {/* Certificate of Occupancy */}
-              {co && (
-                <div className="rp-card" style={{ marginBottom: 16 }}>
-                  <div className="rp-tco-card">
-                    <span className={`rp-tco-badge ${co.is_final ? "final" : co.expired ? "expired" : "expiring"}`}>
-                      {co.is_final ? "Final CO" : co.expired ? "TCO Expired" : "Temp CO"}
-                    </span>
-                    <div>
-                      <div style={{ fontWeight: 700, color: "var(--navy)", marginBottom: 3 }}>
-                        Certificate of Occupancy
-                      </div>
-                      {co.issued_date && (
-                        <div style={{ color: "var(--slate)" }}>
-                          Issued {fmtDate(co.issued_date)}
-                          {!co.is_final && (
-                            <span style={{ color: co.expired ? "var(--risk-red)" : "var(--risk-amber)", marginLeft: 10, fontWeight: 700 }}>
-                              {co.expired ? "— TCO expired" : `— expires ${fmtDate(new Date(new Date(co.issued_date).setMonth(new Date(co.issued_date).getMonth() + 3)).toISOString())}`}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Boilers */}
-              {devices.boilers.length > 0 && (
-                <div className="rp-card" style={{ marginBottom: 16 }}>
-                  <div style={{ padding: "12px 20px 8px", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)", borderBottom: "1px solid var(--navy-10)" }}>
-                    Boilers — {devices.boilers.length} device{devices.boilers.length !== 1 ? "s" : ""}
-                  </div>
-                  <div className="rp-device-grid">
-                    {devices.boilers.map((b: any, i: number) => {
-                      const overdue = b.missed_years > 1;
-                      return (
-                        <div className="rp-device-row" key={i}>
-                          <span className="rp-device-id">{b.id}</span>
-                          <span className={`rp-device-status ${overdue ? "warn" : "ok"}`}>
-                            {overdue ? "Overdue" : "Current"}
-                          </span>
-                          <span className={`rp-device-date ${overdue ? "overdue" : ""}`}>
-                            {b.last_insp ? <>Last insp: {fmtDate(b.last_insp)}{overdue && <> · {b.missed_years.toFixed(1)}yr overdue</>}</> : "No inspection on record"}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Elevators */}
-              {devices.elevators.length > 0 && (
-                <div className="rp-card">
-                  <div style={{ padding: "12px 20px 8px", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)", borderBottom: "1px solid var(--navy-10)" }}>
-                    Elevators — {devices.elevators.length} device{devices.elevators.length !== 1 ? "s" : ""}
-                  </div>
-                  <div className="rp-device-grid">
-                    {devices.elevators.map((e: any, i: number) => {
-                      const overdue = e.missed_years > 1;
-                      return (
-                        <div className="rp-device-row" key={i}>
-                          <span className="rp-device-id">#{e.id}</span>
-                          <span className={`rp-device-status ${overdue ? "warn" : "ok"}`}>
-                            {overdue ? "Overdue" : "Current"}
-                          </span>
-                          <div className={`rp-device-date ${overdue ? "overdue" : ""}`}>
-                            {e.cat1_date && <div>CAT1: {fmtDate(e.cat1_date)}</div>}
-                            {e.pvt_date  && <div>PVT: {fmtDate(e.pvt_date)}</div>}
-                            {!e.cat1_date && !e.pvt_date && <div>No inspection on record</div>}
-                            {overdue && <div>{e.missed_years.toFixed(1)}yr overdue</div>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── VIOLATIONS ── */}
-          {violations.length > 0 && (
-            <div className="rp-section">
-              <div className="rp-section-title">
-                Open Violations
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
-                  {violations.filter(v => v.is_open).length} open · click row to expand
-                </span>
-              </div>
-              <ViolationTabs violations={violations} />
             </div>
           )}
 
