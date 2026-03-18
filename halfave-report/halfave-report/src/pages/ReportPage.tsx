@@ -713,11 +713,6 @@ function ViolationRow({ v, expanded, onToggle }: {
         <td style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {v.violation_type || v.description?.slice(0, 60) || "–"}
         </td>
-        <td>
-          <span className={`rp-status-dot ${v.is_open ? "open" : "closed"}`}>
-            {v.is_open ? "Open" : "Closed"}
-          </span>
-        </td>
         <td style={{ color: "var(--slate)" }}>{fmtDate(v.issue_date)}</td>
         <td style={{ textAlign: "right" }}>
           {hasDetail && (
@@ -729,7 +724,7 @@ function ViolationRow({ v, expanded, onToggle }: {
       </tr>
       {expanded && hasDetail && (
         <tr className="rp-expand-row">
-          <td colSpan={5}>
+          <td colSpan={4}>
             <div className="rp-expand-inner">
               {v.description && (
                 <div className="rp-expand-field rp-expand-desc">
@@ -786,7 +781,7 @@ function ViolationRow({ v, expanded, onToggle }: {
 // ─── Violation Tabs ────────────────────────────────────────────────────────────
 type SortKey = "severity" | "issue_date" | "is_open" | "violation_type";
 
-function ViolationTabs({ violations }: { violations: Violation[] }) {
+function ViolationTabs({ violations, features }: { violations: Violation[]; features: BuildingFeatures | null }) {
   const [tab, setTab] = useState<"HPD" | "DOB" | "ECB">("HPD");
   const [sortKey, setSortKey] = useState<SortKey>("severity");
   const [sortAsc, setSortAsc] = useState(false);
@@ -803,14 +798,36 @@ function ViolationTabs({ violations }: { violations: Violation[] }) {
   const open = current.filter((v) => v.is_open);
   const closed = current.filter((v) => !v.is_open);
 
-  const sorted = [...current].sort((a, b) => {
+  const openOnly = current.filter((v) => v.is_open);
+  const sorted = [...openOnly].sort((a, b) => {
     let cmp = 0;
     if (sortKey === "severity") cmp = severityWeight(b.severity) - severityWeight(a.severity);
     else if (sortKey === "issue_date") cmp = (b.issue_date ?? "").localeCompare(a.issue_date ?? "");
-    else if (sortKey === "is_open") cmp = (b.is_open ? 1 : 0) - (a.is_open ? 1 : 0);
     else if (sortKey === "violation_type") cmp = (a.violation_type ?? "").localeCompare(b.violation_type ?? "");
     return sortAsc ? -cmp : cmp;
   });
+
+  // Synthetic infra alert rows (shown only on HPD tab at top)
+  const infraAlerts: Violation[] = tab === "HPD" ? [
+    ...(features?.expired_tco ? [{
+      id: "__tco__", agency: "HPD" as const, source: "TCO", severity: "C",
+      violation_type: "Expired or Missing Certificate of Occupancy",
+      description: "Building's Temporary CO has expired. Residents may be occupying without valid authorization.",
+      is_open: true, issue_date: undefined,
+    }] : []),
+    ...((features?.boiler_avg_missed_years ?? 0) > 1 ? [{
+      id: "__boiler__", agency: "HPD" as const, source: "Boiler", severity: "B",
+      violation_type: `Boiler Inspection Overdue — ${features!.boiler_count} boiler${features!.boiler_count !== 1 ? "s" : ""}, avg ${features!.boiler_avg_missed_years.toFixed(1)} missed years`,
+      description: "DOB boiler inspection records show missed annual inspections.",
+      is_open: true, issue_date: undefined,
+    }] : []),
+    ...((features?.elevator_avg_missed_years ?? 0) > 1 ? [{
+      id: "__elev__", agency: "HPD" as const, source: "Elevator", severity: "B",
+      violation_type: `Elevator Inspection Overdue — ${features!.elevator_count} elevator${features!.elevator_count !== 1 ? "s" : ""}, avg ${features!.elevator_avg_missed_years.toFixed(1)} missed years`,
+      description: "DOB elevator inspection records show missed CAT1 or periodic inspections.",
+      is_open: true, issue_date: undefined,
+    }] : []),
+  ] : [];
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortAsc(!sortAsc);
@@ -848,7 +865,7 @@ function ViolationTabs({ violations }: { violations: Violation[] }) {
             onClick={() => { setTab(t); setPage(20); }}
           >
             {t}
-            <span className="rp-tab-count">{byAgency[t].length}</span>
+            <span className="rp-tab-count">{byAgency[t].filter(v => v.is_open).length}</span>
           </button>
         ))}
       </div>
@@ -861,16 +878,16 @@ function ViolationTabs({ violations }: { violations: Violation[] }) {
         <>
           <div className="rp-vsummary">
             <div className="rp-vsum-cell">
-              <div className="rp-vsum-num" style={{ color: "var(--risk-red)" }}>{open.length}</div>
+              <div className="rp-vsum-num" style={{ color: "var(--risk-red)" }}>{openOnly.length + (tab === "HPD" ? infraAlerts.length : 0)}</div>
               <div className="rp-vsum-lbl">Open</div>
+            </div>
+            <div className="rp-vsum-cell">
+              <div className="rp-vsum-num">{openOnly.filter((v) => v.severity === "C" || v.severity === "CLASS - 1").length}</div>
+              <div className="rp-vsum-lbl">High Severity</div>
             </div>
             <div className="rp-vsum-cell">
               <div className="rp-vsum-num" style={{ color: "var(--risk-green)" }}>{closed.length}</div>
               <div className="rp-vsum-lbl">Closed</div>
-            </div>
-            <div className="rp-vsum-cell">
-              <div className="rp-vsum-num">{current.filter((v) => v.severity === "C" || v.severity === "CLASS - 1").length}</div>
-              <div className="rp-vsum-lbl">High Severity</div>
             </div>
           </div>
           <div className="rp-vtable-wrap">
@@ -879,12 +896,19 @@ function ViolationTabs({ violations }: { violations: Violation[] }) {
                 <tr>
                   {th("Severity", "severity")}
                   {th("Type / Description", "violation_type")}
-                  {th("Status", "is_open")}
                   {th("Issued", "issue_date")}
                   <th></th>
                 </tr>
               </thead>
               <tbody>
+                {infraAlerts.map((v) => (
+                  <ViolationRow
+                    key={v.id}
+                    v={v}
+                    expanded={expanded.has(v.id)}
+                    onToggle={() => toggleExpand(v.id)}
+                  />
+                ))}
                 {sorted.slice(0, page).map((v) => (
                   <ViolationRow
                     key={v.id}
@@ -1192,45 +1216,7 @@ export default function ReportPage(_props: ReportPageProps) {
         {/* ── BODY ── */}
         <div className="rp-body">
 
-          {/* ── ALERTS ── */}
-          {(features?.expired_tco || (features?.boiler_avg_missed_years ?? 0) > 1 || (features?.elevator_avg_missed_years ?? 0) > 1) && (
-            <div className="rp-section">
-              <div className="rp-section-title">Active Alerts</div>
-              {features?.expired_tco && (
-                <div className="rp-alert red">
-                  <div className="rp-alert-icon">📋</div>
-                  <div className="rp-alert-body">
-                    <div className="rp-alert-title">Expired or Missing TCO</div>
-                    <p>This building's Temporary Certificate of Occupancy has expired. Residents may be occupying a building without valid authorization.</p>
-                  </div>
-                </div>
-              )}
-              {(features?.boiler_avg_missed_years ?? 0) > 1 && (
-                <div className="rp-alert red">
-                  <div className="rp-alert-icon">🔥</div>
-                  <div className="rp-alert-body">
-                    <div className="rp-alert-title">Boiler Inspection Overdue</div>
-                    <p>
-                      {features!.boiler_count} boiler{features!.boiler_count !== 1 ? "s" : ""} averaging{" "}
-                      {features!.boiler_avg_missed_years.toFixed(1)} missed inspection year{features!.boiler_avg_missed_years !== 1 ? "s" : ""}.
-                    </p>
-                  </div>
-                </div>
-              )}
-              {(features?.elevator_avg_missed_years ?? 0) > 1 && (
-                <div className="rp-alert amber">
-                  <div className="rp-alert-icon">🏗️</div>
-                  <div className="rp-alert-body">
-                    <div className="rp-alert-title">Elevator Inspection Overdue</div>
-                    <p>
-                      {features!.elevator_count} elevator{features!.elevator_count !== 1 ? "s" : ""} averaging{" "}
-                      {features!.elevator_avg_missed_years.toFixed(1)} missed inspection year{features!.elevator_avg_missed_years !== 1 ? "s" : ""}.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+
 
           {/* ── RISK DRIVERS ── */}
           {drivers.length > 0 && (
@@ -1334,12 +1320,12 @@ export default function ReportPage(_props: ReportPageProps) {
           {violations.length > 0 && (
             <div className="rp-section">
               <div className="rp-section-title">
-                All Violations
+                Open Violations
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
-                  {violations.length} total · click row to expand
+                  {violations.filter(v => v.is_open).length} open · click row to expand
                 </span>
               </div>
-              <ViolationTabs violations={violations} />
+              <ViolationTabs violations={violations} features={features} />
             </div>
           )}
 
