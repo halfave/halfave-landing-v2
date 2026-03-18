@@ -169,6 +169,33 @@ export interface EdgeViolations {
   dohmh:      { open: EdgeViolationItem[]; closed: EdgeViolationItem[] };
 }
 
+export interface EdgeBoiler {
+  id:           string;
+  status:       string;
+  last_insp:    string | null;
+  missed_years: number;
+}
+
+export interface EdgeElevator {
+  id:           string;
+  status:       string;
+  cat1_date:    string | null;
+  pvt_date:     string | null;
+  missed_years: number;
+}
+
+export interface EdgeCo {
+  type:         string;
+  issued_date:  string | null;
+  is_final:     boolean;
+  expired:      boolean;
+}
+
+export interface EdgeDevices {
+  boilers:   EdgeBoiler[];
+  elevators: EdgeElevator[];
+}
+
 // ─── window.__halfaveBldg ────────────────────────────────────────────────────
 export interface HalfaveBldgWindow {
   // Convenience fields used by MainSitePage
@@ -184,6 +211,8 @@ export interface HalfaveBldgWindow {
   score: EdgeScore;
   features: EdgeFeatures;
   violations: EdgeViolations;
+  devices: EdgeDevices;
+  co: EdgeCo | null;
 }
 
 export type HalfaveWindow = Window & { __halfaveBldg?: HalfaveBldgWindow };
