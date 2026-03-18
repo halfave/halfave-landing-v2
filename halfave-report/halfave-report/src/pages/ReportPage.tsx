@@ -795,7 +795,6 @@ function ViolationTabs({ violations, features }: { violations: Violation[]; feat
   };
 
   const current = byAgency[tab];
-  const open = current.filter((v) => v.is_open);
   const closed = current.filter((v) => !v.is_open);
 
   const openOnly = current.filter((v) => v.is_open);
