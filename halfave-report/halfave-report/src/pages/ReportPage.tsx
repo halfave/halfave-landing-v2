@@ -857,7 +857,6 @@ function ViolationTabs({ violations }: { violations: Violation[] }) {
   };
 
   const current = byAgency[tab];
-  const closed = current.filter((v) => !v.is_open);
 
   const openOnly = current.filter((v) => v.is_open);
   const sorted = [...openOnly].sort((a, b) => {
