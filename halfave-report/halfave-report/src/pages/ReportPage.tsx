@@ -930,9 +930,14 @@ function ComplianceSection({ violations, devices, co }: {
                 </span>
                 <div>
                   <div style={{ fontWeight: 700, color: "var(--navy)", marginBottom: 3, fontFamily: "var(--font-mono)", fontSize: 12 }}>Certificate of Occupancy</div>
-                  {co.issued_date && (
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--slate)" }}>
-                      Issued {fmtDate(co.issued_date)}
+                                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--slate)" }}>
+                      {co.issued_date && <>Issued {fmtDate(co.issued_date)} · </>}
+                      <span style={{ color: co.expired ? "var(--risk-red)" : "var(--risk-amber)", fontWeight: 700 }}>
+                        {co.expired
+                          ? `TCO expired ${co.tco_expiry_date ? fmtDate(co.tco_expiry_date) : ""}`
+                          : `TCO expires ${co.tco_expiry_date ? fmtDate(co.tco_expiry_date) : "~90 days after issuance"}`}
+                      </span>
+                    </div>
                       <span style={{ color: co.expired ? "var(--risk-red)" : "var(--risk-amber)", marginLeft: 10, fontWeight: 700 }}>
                         {co.expired ? "— expired" : `— expires ${fmtDate(new Date(new Date(co.issued_date).setMonth(new Date(co.issued_date).getMonth() + 3)).toISOString())}`}
                       </span>
