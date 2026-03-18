@@ -56,18 +56,11 @@ export default function MainSitePage({ onGetReport, onGoRisk }: Props) {
             unit_count: typeof bldg.units === 'number' ? bldg.units : null,
             management_program: 'PVT',
             risk_score: bldg.riskScore ?? 50,
-            health_score: bldg.riskScore ?? 50,
             risk_bucket: bldg.riskBucket as Building['risk_bucket'] ?? 'Watch',
             percentile: bldg.percentile ?? 50,
             top_drivers: null,
             bin: bldg.bin ?? null,
-            // Full payload for ReportPage — no re-fetch needed
-            _payload: {
-              building: bldg.building,
-              score: bldg.score,
-              features: bldg.features,
-              violations: bldg.violations,
-            },
+
           }
 
           onGetReport(building)
