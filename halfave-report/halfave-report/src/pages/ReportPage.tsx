@@ -840,26 +840,16 @@ function ViolationRow({ v, expanded, onToggle }: {
   );
 }
 
-// ─── Violation Tabs ────────────────────────────────────────────────────────────
-type SortKey = "severity" | "issue_date" | "is_open" | "violation_type";
 
-function ViolationTabs({ violations }: { violations: Violation[] }) {
-  const [tab, setTab] = useState<"HPD" | "DOB" | "ECB">("HPD");
-  const [sortKey, setSortKey] = useState<SortKey>("severity");
+// ─── ViolationTabContent ─────────────────────────────────────────────────────
+function ViolationTabContent({ violations, agency }: { violations: Violation[]; agency: "HPD" | "DOB" | "ECB" }) {
+  const [sortKey, setSortKey] = useState<"severity" | "issue_date" | "violation_type">("severity");
   const [sortAsc, setSortAsc] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(20);
 
-  const byAgency = {
-    HPD: violations.filter((v) => v.agency === "HPD"),
-    DOB: violations.filter((v) => v.agency === "DOB"),
-    ECB: violations.filter((v) => v.agency === "ECB"),
-  };
-
-  const current = byAgency[tab];
-
-  const openOnly = current.filter((v) => v.is_open);
-  const sorted = [...openOnly].sort((a, b) => {
+  const open = violations.filter(v => v.is_open && v.agency === agency);
+  const sorted = [...open].sort((a, b) => {
     let cmp = 0;
     if (sortKey === "severity") cmp = severityWeight(b.severity) - severityWeight(a.severity);
     else if (sortKey === "issue_date") cmp = (b.issue_date ?? "").localeCompare(a.issue_date ?? "");
@@ -867,98 +857,153 @@ function ViolationTabs({ violations }: { violations: Violation[] }) {
     return sortAsc ? -cmp : cmp;
   });
 
-  const infraAlerts: Violation[] = []; // infra alerts shown as device cards, not violation rows
-
-  function toggleSort(key: SortKey) {
-    if (sortKey === key) setSortAsc(!sortAsc);
-    else { setSortKey(key); setSortAsc(false); }
+  function toggleSort(key: typeof sortKey) {
+    if (sortKey === key) setSortAsc(!sortAsc); else { setSortKey(key); setSortAsc(false); }
     setPage(20);
   }
-
   function toggleExpand(id: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
-
-  const th = (label: string, key: SortKey) => (
-    <th
-      className={sortKey === key ? "sorted" : ""}
-      onClick={() => toggleSort(key)}
-    >
-      {label}
-      <span className="sort-arrow">{sortKey === key ? (sortAsc ? "↑" : "↓") : "↕"}</span>
+  const th = (label: string, key: typeof sortKey) => (
+    <th className={sortKey === key ? "sorted" : ""} onClick={() => toggleSort(key)}>
+      {label}<span className="sort-arrow">{sortKey === key ? (sortAsc ? "↑" : "↓") : "↕"}</span>
     </th>
   );
 
-  const tabs: ("HPD" | "DOB" | "ECB")[] = ["HPD", "DOB", "ECB"];
+  if (open.length === 0) return (
+    <div style={{ padding: "32px 20px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--slate)" }}>
+      No open {agency} violations
+    </div>
+  );
 
   return (
-    <div>
-      {(() => {
-        const visibleTabs = tabs.filter(t => byAgency[t].some(v => v.is_open));
-        if (visibleTabs.length === 0) return null;
-        return (
-          <div className="rp-tabs-nav">
-            {visibleTabs.map((t) => (
-              <button
-                key={t}
-                className={`rp-tab-btn ${tab === t ? "active" : ""}`}
-                onClick={() => { setTab(t); setPage(20); }}
-              >
-                {t}
-                <span className="rp-tab-count">{byAgency[t].filter(v => v.is_open).length}</span>
-              </button>
-            ))}
-          </div>
-        );
-      })()}
+    <div className="rp-vtable-wrap">
+      <table className="rp-vtable">
+        <thead><tr>{th("Severity", "severity")}{th("Type / Description", "violation_type")}{th("Issued", "issue_date")}<th></th></tr></thead>
+        <tbody>
+          {sorted.slice(0, page).map(v => (
+            <ViolationRow key={v.id} v={v} expanded={expanded.has(v.id)} onToggle={() => toggleExpand(v.id)} />
+          ))}
+        </tbody>
+      </table>
+      {sorted.length > page && (
+        <button className="rp-load-more" onClick={() => setPage(p => p + 20)}>
+          Show more ({sorted.length - page} remaining)
+        </button>
+      )}
+    </div>
+  );
+}
 
-      {current.length === 0 ? (
-        <div style={{ padding: "32px 20px", textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--slate)" }}>
-          No {tab} violations on record
+// ─── ComplianceSection ────────────────────────────────────────────────────────
+function ComplianceSection({ violations, devices, co }: {
+  violations: Violation[];
+  devices: { boilers: any[]; elevators: any[] };
+  co: any;
+}) {
+  const openByAgency = (t: string) => violations.filter(v => v.is_open && v.agency === t);
+  const violTabs: ("HPD"|"DOB"|"ECB")[] = ["HPD","DOB","ECB"];
+  const hasBoilers   = devices.boilers.length > 0;
+  const hasElevators = devices.elevators.length > 0;
+  const hasCo        = co && !co.is_final;
+  const hasInspections = hasBoilers || hasElevators || hasCo;
+
+  const firstViolTab = violTabs.find(t => openByAgency(t).length > 0);
+  const [activeTab, setActiveTab] = useState<"HPD"|"DOB"|"ECB"|"Inspections">(
+    firstViolTab ?? "Inspections"
+  );
+
+  if (!violations.some(v => v.is_open) && !hasInspections) return null;
+
+  return (
+    <div className="rp-section">
+      <div className="rp-section-title">Compliance Issues</div>
+      <div className="rp-tabs-nav" style={{ marginBottom: 16 }}>
+        {violTabs.filter(t => openByAgency(t).length > 0).map(t => (
+          <button key={t} className={`rp-tab-btn ${activeTab === t ? "active" : ""}`} onClick={() => setActiveTab(t)}>
+            {t} <span className="rp-tab-count">{openByAgency(t).length}</span>
+          </button>
+        ))}
+        {hasInspections && (
+          <button className={`rp-tab-btn ${activeTab === "Inspections" ? "active" : ""}`} onClick={() => setActiveTab("Inspections")}>
+            Inspections
+            <span className="rp-tab-count" style={{ background: "var(--risk-amber)", color: "#fff" }}>
+              {[hasCo, hasBoilers, hasElevators].filter(Boolean).length}
+            </span>
+          </button>
+        )}
+      </div>
+
+      {(activeTab === "HPD" || activeTab === "DOB" || activeTab === "ECB") && (
+        <ViolationTabContent violations={violations} agency={activeTab} />
+      )}
+
+      {activeTab === "Inspections" && (
+        <div>
+          {hasCo && (
+            <div className="rp-card" style={{ marginBottom: 16 }}>
+              <div className="rp-tco-card">
+                <span className={`rp-tco-badge ${co.expired ? "expired" : "expiring"}`}>
+                  {co.expired ? "TCO Expired" : "Temp CO"}
+                </span>
+                <div>
+                  <div style={{ fontWeight: 700, color: "var(--navy)", marginBottom: 3, fontFamily: "var(--font-mono)", fontSize: 12 }}>Certificate of Occupancy</div>
+                  {co.issued_date && (
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--slate)" }}>
+                      Issued {fmtDate(co.issued_date)}
+                      <span style={{ color: co.expired ? "var(--risk-red)" : "var(--risk-amber)", marginLeft: 10, fontWeight: 700 }}>
+                        {co.expired ? "— expired" : `— expires ${fmtDate(new Date(new Date(co.issued_date).setMonth(new Date(co.issued_date).getMonth() + 3)).toISOString())}`}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          {hasBoilers && (
+            <div className="rp-card" style={{ marginBottom: 16 }}>
+              <div style={{ padding: "12px 20px 8px", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "var(--slate)", borderBottom: "1px solid var(--navy-10)" }}>
+                Boilers — {devices.boilers.length} device{devices.boilers.length !== 1 ? "s" : ""}
+              </div>
+              <div className="rp-device-grid">
+                {devices.boilers.map((b: any, i: number) => {
+                  const overdue = b.missed_years > 1;
+                  return (
+                    <div className="rp-device-row" key={i}>
+                      <span className="rp-device-id">{b.id}</span>
+                      <span className={`rp-device-status ${overdue ? "warn" : "ok"}`}>{overdue ? "Overdue" : "Current"}</span>
+                      <span className="rp-device-date" style={{ color: !b.last_insp ? "var(--risk-amber)" : overdue ? "var(--risk-red)" : "var(--slate)" }}>
+                        {b.last_insp ? <>Last insp: {fmtDate(b.last_insp)}{overdue && <span style={{ marginLeft: 8 }}>· {b.missed_years.toFixed(1)}yr ago</span>}</> : "No inspection on record"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {hasElevators && (
+            <div className="rp-card">
+              <div style={{ padding: "12px 20px 8px", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "var(--slate)", borderBottom: "1px solid var(--navy-10)" }}>
+                Elevators — {devices.elevators.length} device{devices.elevators.length !== 1 ? "s" : ""}
+              </div>
+              <div className="rp-device-grid">
+                {devices.elevators.map((e: any, i: number) => {
+                  const overdue = e.missed_years > 1;
+                  return (
+                    <div className="rp-device-row" key={i}>
+                      <span className="rp-device-id">#{e.id}</span>
+                      <span className={`rp-device-status ${overdue ? "warn" : "ok"}`}>{overdue ? "Overdue" : "Current"}</span>
+                      <div className="rp-device-date">
+                        <div style={{ color: e.cat1_date ? (overdue ? "var(--risk-red)" : "var(--slate)") : "var(--risk-amber)" }}>CAT1: {e.cat1_date ? fmtDate(e.cat1_date) : "None on record"}</div>
+                        <div style={{ color: e.pvt_date ? (overdue ? "var(--risk-red)" : "var(--slate)") : "var(--risk-amber)" }}>PVT: {e.pvt_date ? fmtDate(e.pvt_date) : "None on record"}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
-      ) : (
-        <>
-
-          <div className="rp-vtable-wrap">
-            <table className="rp-vtable">
-              <thead>
-                <tr>
-                  {th("Severity", "severity")}
-                  {th("Type / Description", "violation_type")}
-                  {th("Issued", "issue_date")}
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {infraAlerts.map((v) => (
-                  <ViolationRow
-                    key={v.id}
-                    v={v}
-                    expanded={expanded.has(v.id)}
-                    onToggle={() => toggleExpand(v.id)}
-                  />
-                ))}
-                {sorted.slice(0, page).map((v) => (
-                  <ViolationRow
-                    key={v.id}
-                    v={v}
-                    expanded={expanded.has(v.id)}
-                    onToggle={() => toggleExpand(v.id)}
-                  />
-                ))}
-              </tbody>
-            </table>
-            {sorted.length > page && (
-              <button className="rp-load-more" onClick={() => setPage((p) => p + 20)}>
-                Show more ({sorted.length - page} remaining)
-              </button>
-            )}
-          </div>
-        </>
       )}
     </div>
   );
@@ -1257,208 +1302,10 @@ export default function ReportPage(_props: ReportPageProps) {
 
 
 
-          {/* ── VIOLATIONS ── */}
-          {violations.length > 0 && (
-            <div className="rp-section">
-              <div className="rp-section-title">
-                Open Violations
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--slate)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
-                  {violations.filter(v => v.is_open).length} open · click row to expand
-                </span>
-              </div>
-              <ViolationTabs violations={violations} />
-            </div>
-          )}
+          {/* ── COMPLIANCE ISSUES ── */}
+          <ComplianceSection violations={violations} devices={devices} co={co} />
 
-
-          {/* ── INSPECTIONS & CO ── */}
-          {(devices.boilers.length > 0 || devices.elevators.length > 0 || co) && (
-            <div className="rp-section">
-              <div className="rp-section-title">Inspections & Certificates</div>
-
-              {/* Certificate of Occupancy */}
-              {co && !co.is_final && (
-                <div className="rp-card" style={{ marginBottom: 16 }}>
-                  <div className="rp-tco-card">
-                    <span className={`rp-tco-badge ${co.is_final ? "final" : co.expired ? "expired" : "expiring"}`}>
-                      {co.is_final ? "Final CO" : co.expired ? "TCO Expired" : "Temp CO"}
-                    </span>
-                    <div>
-                      <div style={{ fontWeight: 700, color: "var(--navy)", marginBottom: 3 }}>
-                        Certificate of Occupancy
-                      </div>
-                      {co.issued_date && (
-                        <div style={{ color: "var(--slate)" }}>
-                          Issued {fmtDate(co.issued_date)}
-                          {!co.is_final && (
-                            <span style={{ color: co.expired ? "var(--risk-red)" : "var(--risk-amber)", marginLeft: 10, fontWeight: 700 }}>
-                              {co.expired ? "— TCO expired" : `— expires ${fmtDate(new Date(new Date(co.issued_date).setMonth(new Date(co.issued_date).getMonth() + 3)).toISOString())}`}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Boilers */}
-              {devices.boilers.length > 0 && (
-                <div className="rp-card" style={{ marginBottom: 16 }}>
-                  <div style={{ padding: "12px 20px 8px", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)", borderBottom: "1px solid var(--navy-10)" }}>
-                    Boilers — {devices.boilers.length} device{devices.boilers.length !== 1 ? "s" : ""}
-                  </div>
-                  <div className="rp-device-grid">
-                    {devices.boilers.map((b: any, i: number) => {
-                      const overdue = b.missed_years > 1;
-                      return (
-                        <div className="rp-device-row" key={i}>
-                          <span className="rp-device-id">{b.id}</span>
-                          <span className={`rp-device-status ${overdue ? "warn" : "ok"}`}>
-                            {overdue ? "Overdue" : "Current"}
-                          </span>
-                          <span className="rp-device-date" style={{ color: !b.last_insp ? "var(--risk-amber)" : overdue ? "var(--risk-red)" : "var(--slate)" }}>
-                            {b.last_insp ? <>Last insp: {fmtDate(b.last_insp)}{overdue && <span style={{marginLeft:8}}>· {b.missed_years.toFixed(1)}yr ago</span>}</> : "No inspection on record"}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Elevators */}
-              {devices.elevators.length > 0 && (
-                <div className="rp-card">
-                  <div style={{ padding: "12px 20px 8px", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--slate)", borderBottom: "1px solid var(--navy-10)" }}>
-                    Elevators — {devices.elevators.length} device{devices.elevators.length !== 1 ? "s" : ""}
-                  </div>
-                  <div className="rp-device-grid">
-                    {devices.elevators.map((e: any, i: number) => {
-                      const overdue = e.missed_years > 1;
-                      return (
-                        <div className="rp-device-row" key={i}>
-                          <span className="rp-device-id">#{e.id}</span>
-                          <span className={`rp-device-status ${overdue ? "warn" : "ok"}`}>
-                            {overdue ? "Overdue" : "Current"}
-                          </span>
-                          <div className="rp-device-date">
-                            <div style={{ color: e.cat1_date ? (e.missed_years > 1 ? "var(--risk-red)" : "var(--slate)") : "var(--risk-amber)" }}>
-                              CAT1: {e.cat1_date ? fmtDate(e.cat1_date) : "None on record"}
-                            </div>
-                            <div style={{ color: e.pvt_date ? (e.missed_years > 1 ? "var(--risk-red)" : "var(--slate)") : "var(--risk-amber)" }}>
-                              PVT: {e.pvt_date ? fmtDate(e.pvt_date) : "None on record"}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-
-          {/* ── RISK DRIVERS ── */}
-          {drivers.length > 0 && (
-            <div className="rp-section">
-              <div className="rp-section-title">Top Risk Drivers</div>
-              <div className="rp-card">
-                <div className="rp-drivers">
-                  {drivers.map((d, i) => {
-                    const meta = driverMeta(d);
-                    return (
-                      <div className="rp-driver" key={i}>
-                        <span className="rp-driver-idx">{i + 1}</span>
-                        <div
-                          className="rp-driver-icon"
-                          style={{ background: meta.bg }}
-                        >
-                          {meta.icon}
-                        </div>
-                        <span className="rp-driver-text">{d}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── BUILDING METRICS ── */}
-          {features && (
-            <div className="rp-section">
-              <div className="rp-section-title">Building Metrics</div>
-              <div className="rp-stats-grid">
-                <div className="rp-stat">
-                  <div className={`rp-stat-val ${features.open_violations > 20 ? "rp-stat-warn" : features.open_violations > 10 ? "rp-stat-caution" : "rp-stat-ok"}`}>
-                    {fmt(features.open_violations)}
-                  </div>
-                  <div className="rp-stat-lbl">Open violations</div>
-                </div>
-                <div className="rp-stat">
-                  <div className={`rp-stat-val ${features.recent_12m_violations > 30 ? "rp-stat-warn" : features.recent_12m_violations > 15 ? "rp-stat-caution" : ""}`}>
-                    {fmt(features.recent_12m_violations)}
-                  </div>
-                  <div className="rp-stat-lbl">New last 12 months</div>
-                </div>
-                <div className="rp-stat">
-                  <div className={`rp-stat-val ${features.avg_open_age_days > 500 ? "rp-stat-warn" : features.avg_open_age_days > 200 ? "rp-stat-caution" : ""}`}>
-                    {Math.round(features.avg_open_age_days)}d
-                  </div>
-                  <div className="rp-stat-lbl">Avg days open</div>
-                </div>
-                <div className="rp-stat">
-                  <div className={`rp-stat-val ${features.violation_density > 1 ? "rp-stat-warn" : features.violation_density > 0.5 ? "rp-stat-caution" : "rp-stat-ok"}`}>
-                    {features.violation_density.toFixed(2)}
-                  </div>
-                  <div className="rp-stat-lbl">Violations per unit</div>
-                </div>
-                <div className="rp-stat">
-                  <div className={`rp-stat-val ${features.resolution_rate < 0.5 ? "rp-stat-warn" : features.resolution_rate < 0.7 ? "rp-stat-caution" : "rp-stat-ok"}`}>
-                    {Math.round(features.resolution_rate * 100)}%
-                  </div>
-                  <div className="rp-stat-lbl">Resolution rate</div>
-                </div>
-                <div className="rp-stat">
-                  <div className={`rp-stat-val ${features.avg_resolution_days > 365 ? "rp-stat-warn" : features.avg_resolution_days > 180 ? "rp-stat-caution" : ""}`}>
-                    {Math.round(features.avg_resolution_days)}d
-                  </div>
-                  <div className="rp-stat-lbl">Avg days to resolve</div>
-                </div>
-                <div className="rp-stat">
-                  <div className={`rp-stat-val ${features.severity_points > 200 ? "rp-stat-warn" : features.severity_points > 100 ? "rp-stat-caution" : ""}`}>
-                    {fmt(features.severity_points)}
-                  </div>
-                  <div className="rp-stat-lbl">Severity score</div>
-                </div>
-                {totalBalance > 0 && (
-                  <div className="rp-stat">
-                    <div className="rp-stat-val rp-stat-warn">{fmtCurrency(totalBalance)}</div>
-                    <div className="rp-stat-lbl">Balance due</div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── PEER COMPARISON ── */}
-          {peerRows.length > 0 && (
-            <div className="rp-section">
-              <div className="rp-section-title">Peer Comparison vs NYC Average</div>
-              <div className="rp-card">
-                {peerRows.map((row) => (
-                  <PeerBar key={row.label} {...row} />
-                ))}
-              </div>
-              <div style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--slate)" }}>
-                Gray marker = NYC building average. Bar = this building.
-              </div>
-            </div>
-          )}
-
-          {/* ── FOOTER ── */}
+                    {/* ── FOOTER ── */}
           <div style={{
             marginTop: 48,
             paddingTop: 24,
