@@ -12,7 +12,7 @@ interface Building {
   year_built?: number | null;
   zipcode?: string | null;
   management_program?: string | null;
-  slug?: string;
+  slug?: string | null;
 }
 
 interface RiskScore {
@@ -994,7 +994,7 @@ export default function ReportPage(_props: ReportPageProps) {
         risk_score: sc.healthScore ?? 0,
         risk_bucket: sc.riskBucket ?? "Watch",
         percentile: sc.percentile ?? 0,
-        top_drivers: null,
+        top_drivers: undefined,
       });
 
       setFeatures({
