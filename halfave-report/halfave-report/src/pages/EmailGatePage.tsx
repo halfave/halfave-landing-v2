@@ -88,7 +88,7 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
           <div style={s.scoreEyebrow} className="eg-mono">Building Health Index</div>
           <div style={{ ...s.scoreNum, color: bucketColor }}>{score}</div>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: bucketColor, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4 }}>{bucket}</div>
-          <div style={s.scorePct}>Higher than {building.percentile ?? '—'}% of NYC buildings</div>
+          <div style={s.scorePct}>Ranks in the {building.percentile ?? '—'}th percentile citywide</div>
         </div>
 
         {/* Blurred report preview */}
