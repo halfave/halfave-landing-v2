@@ -736,21 +736,6 @@ const CSS = `
   }
 `;
 
-// ─── Driver icon/color map ────────────────────────────────────────────────────
-function driverMeta(d: string): { icon: string; bg: string; color: string } {
-  const dl = d.toLowerCase();
-  if (dl.includes("boiler")) return { icon: "🔥", bg: "#fdf0ed", color: "#c4533a" };
-  if (dl.includes("elevator") || dl.includes("lift")) return { icon: "🏗️", bg: "#fdf0ed", color: "#c4533a" };
-  if (dl.includes("tco") || dl.includes("certificate")) return { icon: "📋", bg: "#fdf8ec", color: "#c9a227" };
-  if (dl.includes("open violation") || dl.includes("count")) return { icon: "⚠️", bg: "#fdf0ed", color: "#c4533a" };
-  if (dl.includes("recent") || dl.includes("12m") || dl.includes("trend")) return { icon: "📈", bg: "#fdf8ec", color: "#c9a227" };
-  if (dl.includes("age") || dl.includes("days")) return { icon: "🕐", bg: "#fdf8ec", color: "#c9a227" };
-  if (dl.includes("density")) return { icon: "📊", bg: "#fdf0ed", color: "#c4533a" };
-  if (dl.includes("severity") || dl.includes("class c") || dl.includes("class a")) return { icon: "🚨", bg: "#fdf0ed", color: "#c4533a" };
-  if (dl.includes("resolution") || dl.includes("resolve")) return { icon: "⏱️", bg: "#fdf8ec", color: "#c9a227" };
-  if (dl.includes("penalty") || dl.includes("balance") || dl.includes("fine")) return { icon: "💰", bg: "#fdf8ec", color: "#c9a227" };
-  return { icon: "⚡", bg: "#f0ede8", color: "#7a8fa6" };
-}
 
 // ─── Violation Row ─────────────────────────────────────────────────────────────
 function ViolationRow({ v, expanded, onToggle }: {
@@ -1009,46 +994,6 @@ function ComplianceSection({ violations, devices, co }: {
   );
 }
 
-// ─── Peer Bar ─────────────────────────────────────────────────────────────────
-function PeerBar({
-  label,
-  value,
-  max,
-  avg,
-  format,
-  warningThreshold,
-}: {
-  label: string;
-  value: number;
-  max: number;
-  avg: number;
-  format?: (n: number) => string;
-  warningThreshold?: number;
-}) {
-  const pct = Math.min((value / max) * 100, 100);
-  const avgPct = Math.min((avg / max) * 100, 100);
-  const isWarn = warningThreshold != null && value > warningThreshold;
-  const fillColor = isWarn ? "var(--risk-red)" : "var(--navy)";
-  const fmtFn = format ?? ((n: number) => String(Math.round(n)));
-
-  return (
-    <div className="rp-peer-row">
-      <div className="rp-peer-label">
-        <span className="rp-peer-name">{label}</span>
-        <span className="rp-peer-val" style={{ color: isWarn ? "var(--risk-red)" : undefined }}>
-          {fmtFn(value)}
-        </span>
-      </div>
-      <div className="rp-peer-track">
-        <div
-          className="rp-peer-fill"
-          style={{ width: `${pct}%`, background: fillColor }}
-        />
-        <div className="rp-peer-avg" style={{ left: `${avgPct}%` }} title={`NYC avg: ${fmtFn(avg)}`} />
-      </div>
-    </div>
-  );
-}
 
 // ─── Main ReportPage ──────────────────────────────────────────────────────────
 interface ReportPageProps {
@@ -1180,8 +1125,6 @@ export default function ReportPage(_props: ReportPageProps) {
   const pct = rs?.percentile ?? 0;
   const score = rs?.health_score ?? rs?.risk_score ?? 0;
   const bucket = score >= 80 ? "Healthy" : score >= 60 ? "Good" : score >= 40 ? "Fair" : "Watch";
-  const drivers = rs?.top_drivers?.drivers ?? [];
-  const boroughName = getBoroughName(building.borough);
 
   const openViolations = features?.open_violations ?? violations.filter((v) => v.is_open).length;
   const recent12m = features?.recent_12m_violations ?? 0;
@@ -1194,40 +1137,6 @@ export default function ReportPage(_props: ReportPageProps) {
   const bandPct = (score / 100) * 100;
 
   // Peer comparison data (NYC averages rough estimates)
-  const peerRows = features
-    ? [
-        {
-          label: "Open Violations",
-          value: features.open_violations,
-          max: 120,
-          avg: 8,
-          warningThreshold: 15,
-        },
-        {
-          label: "Avg Days Open",
-          value: Math.round(features.avg_open_age_days),
-          max: 1000,
-          avg: 180,
-          warningThreshold: 365,
-          format: (n: number) => `${n}d`,
-        },
-        {
-          label: "Violation Density",
-          value: features.violation_density,
-          max: 3,
-          avg: 0.3,
-          warningThreshold: 0.8,
-          format: (n: number) => n.toFixed(2),
-        },
-        {
-          label: "Resolution Rate",
-          value: features.resolution_rate,
-          max: 1,
-          avg: 0.65,
-          format: (n: number) => `${Math.round(n * 100)}%`,
-        },
-      ]
-    : [];
 
   return (
     <>
