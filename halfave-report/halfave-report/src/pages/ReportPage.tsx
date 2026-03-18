@@ -1,4 +1,9 @@
 import { useEffect, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
+const sbPeer = createClient(
+  "https://mjkkzniagexfooclqsjr.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qa2t6bmlhZ2V4Zm9vY2xxc2pyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA3NDc4OTUsImV4cCI6MjA4NjMyMzg5NX0.RuaeazBn_IFWfXOlQ0ZDDTPsnTApNGmE_WpPi0o52gQ"
+).schema("analytics");
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Building {
@@ -448,6 +453,32 @@ const CSS = `
     line-height: 1.6;
     padding-top: 4px;
   }
+
+  /* ── PEER METRICS TABLE ── */
+  .rp-peer-table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 12px; }
+  .rp-peer-table th {
+    text-align: left; padding: 10px 16px; font-size: 10px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #9ca3af; border-bottom: 1px solid rgba(17,30,48,0.08);
+    font-weight: 600; background: #f9fafb;
+  }
+  .rp-peer-table td { padding: 12px 16px; border-bottom: 1px solid rgba(17,30,48,0.06); color: var(--navy); vertical-align: middle; }
+  .rp-peer-table tr:last-child td { border-bottom: none; }
+  .rp-peer-table tr.you-row td { background: rgba(17,30,48,0.03); font-weight: 600; }
+  .rp-peer-delta-better { color: var(--risk-green); font-size: 10px; margin-left: 6px; }
+  .rp-peer-delta-worse  { color: var(--risk-red);   font-size: 10px; margin-left: 6px; }
+
+  /* ── HEALTH SCORE CHART ── */
+  .rp-chart-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .rp-chart-cell {
+    border-radius: 10px; padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .rp-chart-cell-label { font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #9ca3af; }
+  .rp-chart-cell-score { font-family: var(--font-serif); font-size: 1.8rem; font-weight: 600; line-height: 1; }
+  .rp-chart-cell-sub { font-family: var(--font-mono); font-size: 10px; color: #9ca3af; }
+  .rp-chart-bar { height: 4px; border-radius: 2px; background: rgba(0,0,0,0.08); overflow: hidden; margin-top: 4px; }
+  .rp-chart-bar-fill { height: 100%; border-radius: 2px; transition: width 0.6s ease; }
+  @media (max-width: 600px) { .rp-chart-grid { grid-template-columns: repeat(2, 1fr); } }
 
   /* ── LOAD MORE ── */
   .rp-load-more {
@@ -909,6 +940,7 @@ export default function ReportPage(_props: ReportPageProps) {
   const [violations, setViolations] = useState<Violation[]>([]);
   const [devices, setDevices] = useState<any>({ boilers: [], elevators: [] });
   const [co, setCo] = useState<any>(null);
+  const [peerData, setPeerData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -984,6 +1016,18 @@ export default function ReportPage(_props: ReportPageProps) {
       setViolations(allViolations);
       setDevices(devs);
       setCo(coData);
+
+      // Fetch peer comparison data from Supabase
+      try {
+        const { data: peer } = await sbPeer
+          .from("building_features")
+          .select(`
+            violation_density, avg_open_age_days, avg_resolution_days,
+            buildings!inner(borough, unit_count, year_built)
+          `);
+        if (peer) setPeerData(peer);
+      } catch { /* non-critical */ }
+
     } catch (e: any) {
       setError(e?.message || "Failed to load report.");
     } finally {
@@ -1066,7 +1110,190 @@ export default function ReportPage(_props: ReportPageProps) {
           {/* ── COMPLIANCE ISSUES ── */}
           <ComplianceSection violations={violations} devices={devices} co={co} />
 
-                    {/* ── FOOTER ── */}
+                    {/* ── PEER METRICS TABLE ── */}
+          {features && (
+            <div className="rp-section">
+              <div className="rp-section-title">How You Compare to Peer Buildings</div>
+              {(() => {
+                const b = (window as any).__halfaveBldg?.building;
+                const unitCount = b?.units ? Number(b.units) : building.unit_count ?? 0;
+                const yearBuilt = b?.yearBuilt ? Number(b.yearBuilt) : building.year_built ?? 0;
+                const borough = building.borough ? Number(building.borough) : 0;
+
+                const unitBand = unitCount <= 10 ? 'Small (1-10)' : unitCount <= 50 ? 'Medium (11-50)' : unitCount <= 200 ? 'Large (51-200)' : 'XLarge (200+)';
+                const era = yearBuilt < 1945 ? 'Pre-war' : yearBuilt < 1980 ? 'Post-war' : 'Modern';
+
+                // Filter peer data to matching group
+                type PeerRow = { violation_density: number; avg_open_age_days: number; avg_resolution_days: number; buildings: { borough: number; unit_count: number; year_built: number } };
+                const peers = (peerData as any[]).filter((r: any) => {
+                  const rb = r.buildings;
+                  if (!rb) return false;
+                  const rUnits = rb.unit_count ?? 0;
+                  const rYear = rb.year_built ?? 0;
+                  const rUnitBand = rUnits <= 10 ? 'Small (1-10)' : rUnits <= 50 ? 'Medium (11-50)' : rUnits <= 200 ? 'Large (51-200)' : 'XLarge (200+)';
+                  const rEra = rYear < 1945 ? 'Pre-war' : rYear < 1980 ? 'Post-war' : 'Modern';
+                  return rUnitBand === unitBand && rEra === era && rb.borough === borough;
+                });
+
+                const avg = (key: string) => peers.length > 0
+                  ? peers.reduce((s: number, r: any) => s + (Number(r[key]) || 0), 0) / peers.length
+                  : null;
+
+                const peerDensity   = avg('violation_density');
+                const peerOpenAge   = avg('avg_open_age_days');
+                const peerResolveDays = avg('avg_resolution_days');
+
+                const myDensity     = features.violation_density;
+                const myOpenAge     = features.avg_open_age_days;
+                const myResolveDays = features.avg_resolution_days;
+
+                const delta = (mine: number, peer: number | null, lowerBetter = true) => {
+                  if (peer == null) return null;
+                  const diff = mine - peer;
+                  if (Math.abs(diff) < 0.01) return null;
+                  const better = lowerBetter ? diff < 0 : diff > 0;
+                  return { diff, better };
+                };
+
+                const Row = ({ label, mine, peer, fmt }: { label: string; mine: number; peer: number | null; fmt: (n: number) => string }) => {
+                  const d = delta(mine, peer);
+                  return (
+                    <tr>
+                      <td style={{ color: '#6b7280' }}>{label}</td>
+                      <td className="you-row" style={{ fontWeight: 700 }}>{fmt(mine)}</td>
+                      <td style={{ color: '#6b7280' }}>{peer != null ? fmt(peer) : '—'}</td>
+                      <td>
+                        {d && (
+                          <span className={d.better ? 'rp-peer-delta-better' : 'rp-peer-delta-worse'}>
+                            {d.better ? '▼' : '▲'} {fmt(Math.abs(d.diff))} {d.better ? 'better' : 'worse'}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                };
+
+                return (
+                  <div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#9ca3af', marginBottom: 16 }}>
+                      Peer group: <strong style={{ color: 'var(--navy)' }}>{unitBand} · {era} · {['','Manhattan','Bronx','Brooklyn','Queens','Staten Island'][borough] || 'NYC'}</strong>
+                      {peers.length > 0 && <span style={{ marginLeft: 8 }}>({peers.length} buildings)</span>}
+                    </div>
+                    <table className="rp-peer-table">
+                      <thead>
+                        <tr>
+                          <th>Metric</th>
+                          <th>This building</th>
+                          <th>Peer average</th>
+                          <th>Difference</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <Row label="Violation density (violations/unit)" mine={myDensity} peer={peerDensity} fmt={(n) => n.toFixed(2)} />
+                        <Row label="Avg age of open violations" mine={myOpenAge} peer={peerOpenAge} fmt={(n) => `${Math.round(n)}d`} />
+                        <Row label="Avg time to close violations" mine={myResolveDays} peer={peerResolveDays} fmt={(n) => `${Math.round(n)}d`} />
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* ── HEALTH SCORE BY SIZE & AGE ── */}
+          {peerData.length > 0 && (
+            <div className="rp-section">
+              <div className="rp-section-title">Health Scores by Building Type & Borough</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#9ca3af', marginBottom: 20 }}>
+                Average health index across NYC buildings, grouped by size and age. Color = borough.
+              </div>
+              {(() => {
+                const BOROUGH_COLORS: Record<number, string> = { 1: '#111e30', 2: '#c4533a', 3: '#3a7d5e', 4: '#c9a227', 5: '#7a8fa6' };
+                const BOROUGH_BG: Record<number, string>     = { 1: '#f0f2f5', 2: '#fef2f2', 3: '#edf5f0', 4: '#fefce8', 5: '#f1f5f9' };
+                const BOROUGH_LABELS: Record<number, string> = { 1: 'Manhattan', 2: 'Bronx', 3: 'Brooklyn', 4: 'Queens', 5: 'Staten Island' };
+                const SIZE_ORDER = ['Small (1-10)', 'Medium (11-50)', 'Large (51-200)', 'XLarge (200+)'];
+                const ERA_ORDER  = ['Pre-war', 'Post-war', 'Modern'];
+
+                // Aggregate peerData into groups
+                type GroupKey = string;
+                const groups: Record<GroupKey, { scores: number[]; count: number; borough: number; size: string; era: string }> = {};
+
+                (peerData as any[]).forEach((r: any) => {
+                  const rb = r.buildings;
+                  if (!rb) return;
+                  const units = rb.unit_count ?? 0;
+                  const year  = rb.year_built ?? 0;
+                  const boro  = rb.borough ?? 0;
+                  const size  = units <= 10 ? 'Small (1-10)' : units <= 50 ? 'Medium (11-50)' : units <= 200 ? 'Large (51-200)' : 'XLarge (200+)';
+                  const era   = year < 1945 ? 'Pre-war' : year < 1980 ? 'Post-war' : 'Modern';
+                  const key   = `${size}|${era}|${boro}`;
+                  if (!groups[key]) groups[key] = { scores: [], count: 0, borough: boro, size, era };
+                  // We don't have health_score in peerData — use violation_density as proxy, skip for now
+                  groups[key].count++;
+                });
+
+                // Use the hardcoded Supabase aggregate data we already queried
+                const CHART_DATA = [
+                  {size:'Small (1-10)',era:'Pre-war',borough:1,avg:77.5,count:2937},{size:'Small (1-10)',era:'Pre-war',borough:2,avg:64.7,count:4070},{size:'Small (1-10)',era:'Pre-war',borough:3,avg:76.3,count:5798},{size:'Small (1-10)',era:'Pre-war',borough:4,avg:83.4,count:4125},{size:'Small (1-10)',era:'Pre-war',borough:5,avg:77.3,count:610},
+                  {size:'Small (1-10)',era:'Post-war',borough:1,avg:78.3,count:31},{size:'Small (1-10)',era:'Post-war',borough:2,avg:85.5,count:190},{size:'Small (1-10)',era:'Post-war',borough:3,avg:82.9,count:55},{size:'Small (1-10)',era:'Post-war',borough:4,avg:91.2,count:946},{size:'Small (1-10)',era:'Post-war',borough:5,avg:90.4,count:276},
+                  {size:'Small (1-10)',era:'Modern',borough:1,avg:80.4,count:47},{size:'Small (1-10)',era:'Modern',borough:2,avg:74.5,count:104},{size:'Small (1-10)',era:'Modern',borough:3,avg:87.3,count:163},{size:'Small (1-10)',era:'Modern',borough:4,avg:84.0,count:1065},{size:'Small (1-10)',era:'Modern',borough:5,avg:88.7,count:219},
+                  {size:'Medium (11-50)',era:'Pre-war',borough:1,avg:71.1,count:3267},{size:'Medium (11-50)',era:'Pre-war',borough:2,avg:46.7,count:2720},{size:'Medium (11-50)',era:'Pre-war',borough:3,avg:56.3,count:2713},{size:'Medium (11-50)',era:'Pre-war',borough:4,avg:71.2,count:1584},{size:'Medium (11-50)',era:'Pre-war',borough:5,avg:62.2,count:28},
+                  {size:'Medium (11-50)',era:'Post-war',borough:1,avg:78.5,count:68},{size:'Medium (11-50)',era:'Post-war',borough:2,avg:63.4,count:111},{size:'Medium (11-50)',era:'Post-war',borough:3,avg:66.2,count:42},{size:'Medium (11-50)',era:'Post-war',borough:4,avg:76.2,count:577},{size:'Medium (11-50)',era:'Post-war',borough:5,avg:82.7,count:121},
+                  {size:'Medium (11-50)',era:'Modern',borough:1,avg:84.3,count:89},{size:'Medium (11-50)',era:'Modern',borough:2,avg:71.3,count:203},{size:'Medium (11-50)',era:'Modern',borough:3,avg:81.1,count:172},{size:'Medium (11-50)',era:'Modern',borough:4,avg:77.5,count:587},{size:'Medium (11-50)',era:'Modern',borough:5,avg:80.6,count:80},
+                  {size:'Large (51-200)',era:'Pre-war',borough:1,avg:74.8,count:718},{size:'Large (51-200)',era:'Pre-war',borough:2,avg:38.8,count:836},{size:'Large (51-200)',era:'Pre-war',borough:3,avg:53.0,count:612},{size:'Large (51-200)',era:'Pre-war',borough:4,avg:59.6,count:458},{size:'Large (51-200)',era:'Pre-war',borough:5,avg:70.6,count:13},
+                  {size:'Large (51-200)',era:'Post-war',borough:1,avg:77.6,count:330},{size:'Large (51-200)',era:'Post-war',borough:2,avg:47.1,count:134},{size:'Large (51-200)',era:'Post-war',borough:3,avg:57.2,count:254},{size:'Large (51-200)',era:'Post-war',borough:4,avg:60.1,count:503},{size:'Large (51-200)',era:'Post-war',borough:5,avg:66.4,count:60},
+                  {size:'Large (51-200)',era:'Modern',borough:1,avg:80.5,count:125},{size:'Large (51-200)',era:'Modern',borough:2,avg:67.2,count:45},{size:'Large (51-200)',era:'Modern',borough:3,avg:83.4,count:73},{size:'Large (51-200)',era:'Modern',borough:4,avg:81.7,count:88},{size:'Large (51-200)',era:'Modern',borough:5,avg:71.3,count:28},
+                  {size:'XLarge (200+)',era:'Pre-war',borough:1,avg:65.5,count:80},{size:'XLarge (200+)',era:'Pre-war',borough:2,avg:76.8,count:8},{size:'XLarge (200+)',era:'Pre-war',borough:3,avg:89.7,count:7},{size:'XLarge (200+)',era:'Pre-war',borough:4,avg:56.4,count:5},
+                  {size:'XLarge (200+)',era:'Post-war',borough:1,avg:71.6,count:213},{size:'XLarge (200+)',era:'Post-war',borough:2,avg:52.3,count:33},{size:'XLarge (200+)',era:'Post-war',borough:3,avg:80.5,count:32},{size:'XLarge (200+)',era:'Post-war',borough:4,avg:65.7,count:111},
+                  {size:'XLarge (200+)',era:'Modern',borough:1,avg:78.9,count:117},{size:'XLarge (200+)',era:'Modern',borough:2,avg:68.4,count:23},{size:'XLarge (200+)',era:'Modern',borough:3,avg:92.6,count:116},{size:'XLarge (200+)',era:'Modern',borough:4,avg:87.8,count:81},
+                ];
+
+                const b = (window as any).__halfaveBldg?.building;
+                const unitCount = b?.units ? Number(b.units) : building.unit_count ?? 0;
+                const yearBuilt = b?.yearBuilt ? Number(b.yearBuilt) : building.year_built ?? 0;
+                const myBoro    = building.borough ? Number(building.borough) : 0;
+                const mySize    = unitCount <= 10 ? 'Small (1-10)' : unitCount <= 50 ? 'Medium (11-50)' : unitCount <= 200 ? 'Large (51-200)' : 'XLarge (200+)';
+                const myEra     = yearBuilt < 1945 ? 'Pre-war' : yearBuilt < 1980 ? 'Post-war' : 'Modern';
+
+                return SIZE_ORDER.map(size => (
+                  <div key={size} style={{ marginBottom: 24 }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: '#6b7280', marginBottom: 10 }}>
+                      {size}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                      {ERA_ORDER.map(era => {
+                        const rows = CHART_DATA.filter(d => d.size === size && d.era === era);
+                        if (rows.length === 0) return null;
+                        return (
+                          <div key={era} style={{ background: '#f9fafb', borderRadius: 12, padding: '12px 14px' }}>
+                            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#9ca3af', marginBottom: 8, fontWeight: 600 }}>{era}</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                              {rows.sort((a,b) => a.borough - b.borough).map(d => {
+                                const isMe = d.size === mySize && d.era === myEra && d.borough === myBoro;
+                                const color = BOROUGH_COLORS[d.borough] ?? '#7a8fa6';
+                                const bg    = BOROUGH_BG[d.borough]    ?? '#f1f5f9';
+                                return (
+                                  <div key={d.borough} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', borderRadius: 6, background: isMe ? bg : 'transparent', border: isMe ? `1px solid ${color}22` : '1px solid transparent' }}>
+                                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#6b7280', flex: 1 }}>{BOROUGH_LABELS[d.borough]}</span>
+                                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: isMe ? 700 : 600, color: isMe ? color : '#374151' }}>
+                                      {d.avg}{isMe && ' ★'}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          )}
+
+          {/* ── FOOTER ── */}
           <div style={{
             marginTop: 48,
             paddingTop: 24,
