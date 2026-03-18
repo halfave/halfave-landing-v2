@@ -69,10 +69,7 @@ const BOROUGH_NAMES: Record<string, string> = {
   SI: "Staten Island",
 };
 
-function getBoroughName(b?: number | string | null) {
-  if (!b) return "NYC";
-  return BOROUGH_NAMES[String(b)] ?? "NYC";
-}
+
 
 function riskColor(score: number) {
   if (score >= 80) return "var(--risk-green)";
@@ -1148,7 +1145,7 @@ export default function ReportPage(_props: ReportPageProps) {
             <div className="rp-hero-eyebrow">NYC Building Risk Report · Half Ave</div>
             <div className="rp-hero-address">{building.address}</div>
             <div className="rp-hero-meta">
-              <span>{boroughName}</span>
+              <span>{BOROUGH_NAMES[String(building.borough)] ?? "NYC"}</span>
               {building.zipcode && <span>{building.zipcode}</span>}
               {building.stories && <span>{building.stories} stories</span>}
               {building.unit_count && <span>{building.unit_count} units</span>}
