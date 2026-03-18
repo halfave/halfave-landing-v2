@@ -19,7 +19,7 @@ interface Building {
   year_built?: number | null;
   zipcode?: string | null;
   management_program?: string | null;
-  slug?: string;
+  slug?: string | null;
 }
 
 interface RiskScore {
@@ -1001,12 +1001,12 @@ export default function ReportPage(_props: ReportPageProps) {
           .from("building_risk_scores")
           .select("*")
           .eq("building_id", buildingId)
-          .single(),
+          .maybeSingle(),
         supabase
           .from("building_features")
           .select("*")
           .eq("building_id", buildingId)
-          .single(),
+          .maybeSingle(),
         supabase
           .from("violations")
           .select("*")
