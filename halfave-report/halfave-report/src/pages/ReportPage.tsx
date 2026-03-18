@@ -938,11 +938,7 @@ function ComplianceSection({ violations, devices, co }: {
                           : `TCO expires ${co.tco_expiry_date ? fmtDate(co.tco_expiry_date) : "~90 days after issuance"}`}
                       </span>
                     </div>
-                      <span style={{ color: co.expired ? "var(--risk-red)" : "var(--risk-amber)", marginLeft: 10, fontWeight: 700 }}>
-                        {co.expired ? "— expired" : `— expires ${fmtDate(new Date(new Date(co.issued_date).setMonth(new Date(co.issued_date).getMonth() + 3)).toISOString())}`}
-                      </span>
-                    </div>
-                  )}
+
                 </div>
               </div>
             </div>
