@@ -35,6 +35,26 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
     }
     setLoading(true)
     setError(null)
+
+    // Fresh bin-lookup to get latest violations data
+    let violations = (window as any).__halfaveBldg?.violations ?? null
+    const bin = building.bin ? String(building.bin) : null
+    if (bin) {
+      try {
+        const res = await fetch(`https://mjkkzniagexfooclqsjr.supabase.co/functions/v1/bin-lookup?bin=${bin}`)
+        if (res.ok) {
+          const fresh = await res.json()
+          if (fresh?.violations) {
+            violations = fresh.violations
+            // Update the global cache too
+            if ((window as any).__halfaveBldg) {
+              (window as any).__halfaveBldg.violations = fresh.violations
+            }
+          }
+        }
+      } catch (e) { /* fall back to cached violations */ }
+    }
+
     // Edge Function handles both lead insert and email send
     fetch('https://mjkkzniagexfooclqsjr.supabase.co/functions/v1/send-report-email', {
       method: 'POST',
@@ -45,8 +65,8 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
         risk_score: building.risk_score,
         percentile: building.percentile ?? null,
         risk_bucket: building.risk_bucket,
-        bin: building.bin ? String(building.bin) : null,
-        violations: (window as any).__halfaveBldg?.violations ?? null,
+        bin,
+        violations,
       }),
     }).catch(err => console.warn('Email send failed:', err))
 
