@@ -46,6 +46,7 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
         percentile: building.percentile ?? null,
         risk_bucket: building.risk_bucket,
         bin: building.bin ? String(building.bin) : null,
+        violations: (window as any).__halfaveBldg?.violations ?? null,
       }),
     }).catch(err => console.warn('Email send failed:', err))
 
@@ -85,10 +86,10 @@ export default function EmailGatePage({ building, onUnlock, onBack }: Props) {
 
         {/* Score */}
         <div style={s.scoreBlock}>
-          <div style={s.scoreEyebrow} className="eg-mono">Building Health Index</div>
+          <div style={s.scoreEyebrow} className="eg-mono">NYC Building Health Score</div>
           <div style={{ ...s.scoreNum, color: bucketColor }}>{score}</div>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: bucketColor, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4 }}>{bucket}</div>
-          <div style={s.scorePct}>Ranks in the {building.percentile ?? '—'}th percentile citywide</div>
+          <div style={s.scorePct}>Higher than {building.percentile ?? '—'}% of NYC buildings</div>
         </div>
 
         {/* Blurred report preview */}
