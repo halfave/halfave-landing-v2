@@ -813,9 +813,12 @@ function ComplianceSection({ violations, devices, co }: {
 }) {
   const openByAgency = (t: string) => violations.filter(v => v.is_open && v.agency === t);
   const violTabs: ("HPD"|"DOB"|"ECB")[] = ["HPD","DOB","ECB"];
-  const overdueBoilers   = devices.boilers.filter((b: any) => b.missed_years > 1 && (b.status||'').toLowerCase().includes('accept'));
+  const OVERDUE_CUTOFF = new Date('2025-01-01');
+  const isOverdue = (dateStr: string | null | undefined) => !dateStr || new Date(dateStr) < OVERDUE_CUTOFF;
+  const overdueBoilers   = devices.boilers.filter((b: any) => isOverdue(b.last_insp) && (b.status||'').toLowerCase().includes('accept'));
   const hasBoilers   = overdueBoilers.length > 0;
-  const overdueElevators = devices.elevators.filter((e: any) => e.missed_years > 1 && (e.status||'').toUpperCase().includes('ACTIVE'));
+  const overdueElevators = devices.elevators.filter((e: any) =>
+    ((isOverdue(e.cat1_date)) || (isOverdue(e.pvt_date))) && (e.status||'').toUpperCase().includes('ACTIVE'));
   const hasElevators = overdueElevators.length > 0;
   const hasCo        = co && !co.is_final;
   const hasInspections = hasBoilers || hasElevators || hasCo;
@@ -880,7 +883,7 @@ function ComplianceSection({ violations, devices, co }: {
               </div>
               <div className="rp-device-grid">
                 {overdueBoilers.map((b: any, i: number) => {
-                  const overdue = b.missed_years > 1;
+                  const overdue = isOverdue(b.last_insp);
                   return (
                     <div className="rp-device-row" key={i}>
                       <span className="rp-device-id">{b.id}</span>
@@ -901,14 +904,16 @@ function ComplianceSection({ violations, devices, co }: {
               </div>
               <div className="rp-device-grid">
                 {overdueElevators.map((e: any, i: number) => {
-                  const overdue = e.missed_years > 1;
+                  const catOverdue = isOverdue(e.cat1_date);
+                  const pvtOverdue = isOverdue(e.pvt_date);
+                  const overdue = catOverdue || pvtOverdue;
                   return (
                     <div className="rp-device-row" key={i}>
                       <span className="rp-device-id">#{e.id}</span>
                       <span className={`rp-device-status ${overdue ? "warn" : "ok"}`}>{overdue ? "Overdue" : "Current"}</span>
                       <div className="rp-device-date">
-                        <div style={{ color: e.cat1_date ? (overdue ? "var(--risk-red)" : "var(--slate)") : "var(--risk-amber)" }}>CAT1: {e.cat1_date ? fmtDate(e.cat1_date) : "None on record"}</div>
-                        <div style={{ color: e.pvt_date ? (overdue ? "var(--risk-red)" : "var(--slate)") : "var(--risk-amber)" }}>PVT: {e.pvt_date ? fmtDate(e.pvt_date) : "None on record"}</div>
+                        <div style={{ color: e.cat1_date ? (catOverdue ? "var(--risk-red)" : "var(--slate)") : "var(--risk-amber)" }}>CAT1: {e.cat1_date ? fmtDate(e.cat1_date) : "None on record"}</div>
+                        <div style={{ color: e.pvt_date ? (pvtOverdue ? "var(--risk-red)" : "var(--slate)") : "var(--risk-amber)" }}>PVT: {e.pvt_date ? fmtDate(e.pvt_date) : "None on record"}</div>
                       </div>
                     </div>
                   );
@@ -946,7 +951,7 @@ function ComplianceSection({ violations, devices, co }: {
 
 
 // ─── Main ReportPage ──────────────────────────────────────────────────────────
-interface ReportPageProps {
+export interface ReportPageProps {
   building?: Building;
   email?: string;
   onReset?: () => void;
