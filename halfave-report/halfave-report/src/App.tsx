@@ -4,12 +4,14 @@ import MainSitePage from './pages/MainSitePage'
 import EmailGatePage from './pages/EmailGatePage'
 import ReportPage from './pages/ReportPage'
 import RiskIndexPage from './pages/RiskIndexPage'
+import HealthPage from './pages/HealthPage'
 
-type Step = 'main' | 'email' | 'report' | 'risk'
+type Step = 'main' | 'email' | 'report' | 'risk' | 'health'
 
 export default function App() {
   const [step, setStep] = useState<Step>(() => {
     if (window.location.pathname === '/risk' || window.location.hash === '#risk') return 'risk'
+    if (window.location.pathname === '/health') return 'health'
     // Deep-link from email: /report?bin=XXXXXXX skips the gate
     const params = new URLSearchParams(window.location.search)
     if ((window.location.pathname === '/report' || params.has('bin')) && params.get('bin')) return 'report'
@@ -19,13 +21,15 @@ export default function App() {
   const [email, setEmail] = useState('')
 
   useEffect(() => {
-    if (step === 'risk') window.history.pushState({}, '', '/risk')
-    else if (step === 'main') window.history.pushState({}, '', '/')
+    if (step === 'risk')   window.history.pushState({}, '', '/risk')
+    else if (step === 'health') window.history.pushState({}, '', '/health')
+    else if (step === 'main')  window.history.pushState({}, '', '/')
   }, [step])
 
   useEffect(() => {
     const onPop = () => {
-      if (window.location.pathname === '/risk') setStep('risk')
+      if (window.location.pathname === '/risk')   setStep('risk')
+      else if (window.location.pathname === '/health') setStep('health')
       else setStep('main')
     }
     window.addEventListener('popstate', onPop)
@@ -40,6 +44,8 @@ export default function App() {
   switch (step) {
     case 'risk':
       return <RiskIndexPage onBack={handleReset} />
+    case 'health':
+      return <HealthPage />
     case 'main':
       return <MainSitePage onGetReport={handleGetReport} onGoRisk={handleGoRisk} />
     case 'email':
