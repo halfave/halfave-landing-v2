@@ -45,7 +45,7 @@ interface BuildingFeatures {
 
 interface Violation {
   id: string;
-  agency: "HPD" | "DOB" | "ECB";
+  agency: "HPD" | "DOB" | "ECB" | "Sanitation" | "DOHMH";
   source: string;
   severity?: string;
   violation_type?: string;
@@ -752,7 +752,7 @@ function ViolationRow({ v, expanded, onToggle }: {
 
 
 // ─── ViolationTabContent ─────────────────────────────────────────────────────
-function ViolationTabContent({ violations, agency }: { violations: Violation[]; agency: "HPD" | "DOB" | "ECB" }) {
+function ViolationTabContent({ violations, agency }: { violations: Violation[]; agency: "HPD" | "DOB" | "ECB" | "Sanitation" | "DOHMH" }) {
   const [sortKey, setSortKey] = useState<"severity" | "issue_date" | "violation_type">("severity");
   const [sortAsc, setSortAsc] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -812,7 +812,7 @@ function ComplianceSection({ violations, devices, co }: {
   co: any;
 }) {
   const openByAgency = (t: string) => violations.filter(v => v.is_open && v.agency === t);
-  const violTabs: ("HPD"|"DOB"|"ECB")[] = ["HPD","DOB","ECB"];
+  const violTabs: ("HPD"|"DOB"|"ECB"|"Sanitation"|"DOHMH")[] = ["HPD","DOB","ECB","Sanitation","DOHMH"];
   const OVERDUE_CUTOFF = new Date('2025-01-01');
   const isOverdue = (dateStr: string | null | undefined) => !dateStr || new Date(dateStr) < OVERDUE_CUTOFF;
   const overdueBoilers   = devices.boilers.filter((b: any) => isOverdue(b.last_insp) && (b.status||'').toLowerCase().includes('accept'));
@@ -824,7 +824,7 @@ function ComplianceSection({ violations, devices, co }: {
   const hasInspections = hasBoilers || hasElevators || hasCo;
 
   const firstViolTab = violTabs.find(t => openByAgency(t).length > 0);
-  const [activeTab, setActiveTab] = useState<"HPD"|"DOB"|"ECB"|"Inspections">(
+  const [activeTab, setActiveTab] = useState<"HPD"|"DOB"|"ECB"|"Sanitation"|"DOHMH"|"Inspections">(
     firstViolTab ?? "Inspections"
   );
 
@@ -849,7 +849,7 @@ function ComplianceSection({ violations, devices, co }: {
         )}
       </div>
 
-      {(activeTab === "HPD" || activeTab === "DOB" || activeTab === "ECB") && (
+      {(activeTab === "HPD" || activeTab === "DOB" || activeTab === "ECB" || activeTab === "Sanitation" || activeTab === "DOHMH") && (
         <ViolationTabContent violations={violations} agency={activeTab} />
       )}
 
@@ -1038,6 +1038,8 @@ export default function ReportPage(_props: ReportPageProps) {
         ...flattenAgency([...(viols.hpd?.open ?? []),  ...(viols.hpd?.closed ?? [])],  "HPD"),
         ...flattenAgency([...(viols.dob?.open ?? []),  ...(viols.dob?.closed ?? [])],  "DOB"),
         ...flattenAgency([...(viols.ecb?.open ?? []),  ...(viols.ecb?.closed ?? [])],  "ECB"),
+        ...flattenAgency([...(viols.sanitation?.open ?? []), ...(viols.sanitation?.closed ?? [])], "Sanitation"),
+        ...flattenAgency([...(viols.dohmh?.open ?? []),     ...(viols.dohmh?.closed ?? [])],     "DOHMH"),
       ];
 
       setViolations(allViolations);
